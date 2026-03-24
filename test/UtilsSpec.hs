@@ -1,0 +1,21 @@
+module UtilsSpec (
+    clampSpec
+)
+where
+
+import Test.Hspec
+--import Test.QuickCheck
+
+import Utils
+
+clampSpec :: SpecWith ()
+clampSpec = do
+    describe "clamp" $ do
+        it "clamp on a value below the range, gives the range lower bound" $ do
+            (clamp (-5) 0 3) `shouldBe` (0::Int)
+
+        it "clamp on a value above the range, gives the range upper bound" $ do
+            (clamp 10 0 3) `shouldBe` (3::Int)
+
+        it "clamp on a value inside the range, gives the value" $ do
+            (clamp 2 0 3) `shouldBe` (2::Int)

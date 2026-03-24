@@ -1,2 +1,21 @@
+import UtilsSpec
+import ObjectsSpec
+
+import Test.Hspec
+
 main :: IO ()
-main = putStrLn "Test suite not yet implemented"
+main = hspec $ do
+
+    -- UTILS
+    clampSpec
+
+    -- OBJECTS
+    hitboxInitSpec
+    collisionSpec
+    assocCollisionSpec
+    directionInitSpec
+    objectInitSpec
+    objectGetHitboxSpec
+    objectGetDirectionSpec
+    objectGetSpeedSpec
+    wallInitSpec

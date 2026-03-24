@@ -41,6 +41,9 @@ packages:
 #
 # extra-deps: []
 
+extra-deps:
+- gloss-juicy-0.2.3
+
 # Override default flag values for project packages and extra-deps
 # flags: {}
 

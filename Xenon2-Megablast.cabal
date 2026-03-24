@@ -25,7 +25,10 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      Keyboard
+      Model
+      Objects
+      Utils
   other-modules:
       Paths_Xenon2_Megablast
   autogen-modules:
@@ -34,9 +37,12 @@ library
       src
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base >=4.7 && <5
+      QuickCheck
+    , base >=4.7 && <5
     , containers
     , gloss
+    , gloss-juicy
+    , hspec
     , random
   default-language: Haskell2010
 
@@ -50,10 +56,13 @@ executable Xenon2-Megablast-exe
       app
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      Xenon2-Megablast
+      QuickCheck
+    , Xenon2-Megablast
     , base >=4.7 && <5
     , containers
     , gloss
+    , gloss-juicy
+    , hspec
     , random
   default-language: Haskell2010
 
@@ -61,6 +70,8 @@ test-suite Xenon2-Megablast-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      ObjectsSpec
+      UtilsSpec
       Paths_Xenon2_Megablast
   autogen-modules:
       Paths_Xenon2_Megablast
@@ -68,9 +79,12 @@ test-suite Xenon2-Megablast-test
       test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N -fwrite-ide-info -hiedir=.hie
   build-depends:
-      Xenon2-Megablast
+      QuickCheck
+    , Xenon2-Megablast
     , base >=4.7 && <5
     , containers
     , gloss
+    , gloss-juicy
+    , hspec
     , random
   default-language: Haskell2010
