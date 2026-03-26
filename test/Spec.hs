@@ -12,7 +12,7 @@ main = hspec $ do
     -- OBJECTS
     hitboxInitSpec
     collisionSpec
-    assocCollisionSpec
+    commutativityCollisionSpec
     directionInitSpec
     objectInitSpec
     objectGetHitboxSpec

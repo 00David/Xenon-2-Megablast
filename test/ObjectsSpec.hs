@@ -1,7 +1,7 @@
 module ObjectsSpec (
     hitboxInitSpec,
     collisionSpec,
-    assocCollisionSpec,
+    commutativityCollisionSpec,
     directionInitSpec,
     objectInitSpec,
     objectGetHitboxSpec,
@@ -106,14 +106,16 @@ collisionSpec = do
                 c = Circle 50 50 3
             collision hlist c `shouldBe` False
 
-test_prop_assoc_collision :: TestHitbox -> TestHitbox -> Property
-test_prop_assoc_collision h1 h2 = property (prop_assoc_collision (getHitbox h1) (getHitbox h2))
+test_prop_commutativity_collision :: TestHitbox -> TestHitbox -> Property
+test_prop_commutativity_collision h1 h2 = property (prop_commutativity_collision (getHitbox h1) (getHitbox h2))
 
-assocCollisionSpec :: Spec
-assocCollisionSpec = do
-    describe "prop_assoc_collision" $ do
+commutativityCollisionSpec :: Spec
+commutativityCollisionSpec = do
+    describe "prop_commutativity_collision" $ do
         it "is symmetric (collision h1 h2 == collision h2 h1)" $
-            property test_prop_assoc_collision
+            property test_prop_commutativity_collision
+
+
 
 -- ============================================================
 -- ====================== OBJECTS =============================

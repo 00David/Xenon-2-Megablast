@@ -9,33 +9,42 @@ import Debug.Trace
 
 import Model
 import Keyboard
+import Objects
 
 data GameControl = GameControl { 
     keyboard :: Keyboard,
     state :: GameState
-  }
-  deriving Show
+} deriving Show
 
-generateCoordinates :: Int -> Int ->  IO (Float, Float)
+generateCoordinates :: Int -> Int ->  IO (Int, Int)
 generateCoordinates w h = do
-    x <- randomRIO (fromIntegral (((-widthScreen) `div` 2) + w), fromIntegral ((widthScreen `div` 2) - w))
-    y <- randomRIO (fromIntegral (((-heigthScreen) `div` 2) + h), fromIntegral ((heigthScreen `div` 2) - h))
+    x <- randomRIO ((((-widthScreen) `div` 2) + w),  ((widthScreen `div` 2) - w))
+    y <- randomRIO ((((-heightScreen) `div` 2) + h),  ((heightScreen `div` 2) - h))
     return (x, y)
 
 initGame :: IO GameControl
 initGame = do 
-  (vx, vy) <- generateCoordinates widthVirus heigthVirus
-  return GameControl {
-                  keyboard = initKeyboard,
-                  state = initGameState vx vy
-  }
+    (vx, vy) <- generateCoordinates widthVirus heightVirus
+    maybeSpaceshipP1 <- loadJuicyPNG "./assets/spaceship/spaceship_norm.png"
+    case maybeSpaceshipP1 of
+        Nothing  -> error "Imossible to load spaceship"
+        Just shipP1 -> return GameControl {
+            keyboard = initKeyboard,
+            state = initGameState shipP1 vx vy
+        } 
+  
 
-renderIO :: Picture -> Picture -> Picture -> GameControl -> IO Picture
-renderIO bgnd perso virus gc = return $ render bgnd perso virus gc
+renderIO :: Picture -> Picture -> GameControl -> IO Picture
+renderIO bgnd virus gc = return $ render bgnd virus gc
 
-render :: Picture -> Picture -> Picture -> GameControl -> Picture
-render bgnd perso virus (GameControl _ (GameState px py vx vy _)) =
-  Pictures [bgnd, Translate px py perso, Translate vx vy virus]
+render :: Picture -> Picture -> GameControl -> Picture
+render bgnd virus (GameControl _ (GameState p1 vx vy _)) =
+    let p1o = playerObject p1 in
+    case centerHitbox (objectHitbox p1o) of
+        Just (p1x, p1y) -> Pictures [bgnd, Translate (fromIntegral p1x) (fromIntegral p1y) (objectPicture p1o) , 
+            Translate (fromIntegral vx) (fromIntegral vy) virus]
+        Nothing -> error "player must have a center"
+  
 
 handleEventsIO :: Event -> GameControl -> IO GameControl
 handleEventsIO ev gc = return $ handleEvents ev gc
@@ -47,38 +56,45 @@ handleEvents ev (GameControl kbd gs) =
 
 updateIO :: Float -> GameControl -> IO GameControl
 updateIO dt gc = do 
-  let newGC@(GameControl _ st) = update dt gc
-  if collisionWithVirus st then trace "VIRUS DETRUIT !" $ do
-    (newVX, newVY) <- generateCoordinates widthVirus heigthVirus
-    return newGC{state = st{virusX = newVX, virusY = newVY}}
-  else
-    return newGC
+    let newGC@(GameControl _ st) = update dt gc
+    if collisionWithVirus st then trace "VIRUS DETRUIT !" $ do
+        (newVX, newVY) <- generateCoordinates widthVirus heightVirus
+        return newGC{state = st{virusX = newVX, virusY = newVY}}
+    else
+        return newGC
 
 update :: Float -> GameControl -> GameControl
-update _ (GameControl kbd gs) =
-  let gs1 = if isKeyDown (SpecialKey KeyLeft) kbd then moveLeft gs else gs in
-  let gs2 = if isKeyDown (SpecialKey KeyRight) kbd then moveRight gs1 else gs1 in
-  let gs3 = if isKeyDown (SpecialKey KeyUp) kbd then moveUp gs2 else gs2 in
-  let gs4 = if isKeyDown (SpecialKey KeyDown) kbd then moveDown gs3 else gs3 in
-  GameControl kbd gs4
+update _ (GameControl kbd gs@(GameState p1@(Player p1o _) _ _ _)) =
+    let xdirp1 = case (isKeyDown (SpecialKey KeyLeft) kbd, isKeyDown (SpecialKey KeyRight) kbd) of
+                    (True, False) -> -1
+                    (False, True) -> 1
+                    _ -> 0
+      
+        ydirp1 = case (isKeyDown (SpecialKey KeyUp) kbd, isKeyDown (SpecialKey KeyDown) kbd) of
+                    (True, False) -> 1
+                    (False, True) -> -1
+                    _ -> 0
+        picp1 = objectPicture p1o
+        hp1 = objectHitbox p1o
+        sp1 = if xdirp1 /= 0 || ydirp1 /= 0 then 4 else 0
+    in 
+        let gs2 = gs{ player1=p1{ playerObject = MovableO picp1 hp1 (Direction xdirp1 ydirp1) sp1 } }
+            gs3 = movePlayer1 gs2
+        in GameControl kbd gs3
 
 -- Game loop
 main :: IO ()
 main = do
-  maybeBgnd <- loadJuicyPNG "./assets/Starfield.png"
-  maybeSpaceshipP1 <- loadJuicyPNG "./assets/spaceship/spaceship_norm.png"
-  virus <- loadBMP "./assets/virus.bmp"
-  initCtrl <- initGame
-  case (maybeBgnd, maybeSpaceshipP1) of
-        (Nothing, _)  -> putStrLn "Imossible to load background"
-        (_ , Nothing)  -> putStrLn "Imossible to load player1 spaceship"
-        (Just bgnd, Just spaceshipP1) -> playIO 
-                      (InWindow "Xenon 2 : Megablast" (widthScreen, heigthScreen) (10, 10)) 
-                      black 
-                      60
-                      initCtrl
-                      (renderIO bgnd spaceshipP1 virus)
-                      handleEventsIO
-                      updateIO
-
-  
+    maybeBgnd <- loadJuicyPNG "./assets/Starfield.png"
+    virus <- loadBMP "./assets/virus.bmp"
+    initCtrl <- initGame
+    case maybeBgnd of
+        Nothing  -> error "Imossible to load background"
+        Just bgnd -> playIO 
+                        (InWindow "Xenon 2 : Megablast" (widthScreen, heightScreen) (10, 10)) 
+                        black 
+                        60
+                        initCtrl
+                        (renderIO bgnd virus)
+                        handleEventsIO
+                        updateIO
