@@ -1,21 +1,17 @@
-import UtilsSpec
-import ObjectsSpec
-
 import Test.Hspec
+
+import qualified UtilsSpec
+import qualified HitboxSpec
+import qualified ObjectsSpec
 
 main :: IO ()
 main = hspec $ do
 
     -- UTILS
-    clampSpec
+    describe "Utils" UtilsSpec.spec
+
+    -- HITBOX
+    describe "Hitbox" HitboxSpec.spec
 
     -- OBJECTS
-    hitboxInitSpec
-    collisionSpec
-    commutativityCollisionSpec
-    directionInitSpec
-    objectInitSpec
-    objectGetHitboxSpec
-    objectGetDirectionSpec
-    objectGetSpeedSpec
-    wallInitSpec
+    describe "Objects" ObjectsSpec.spec

@@ -25,9 +25,12 @@ source-repository head
 
 library
   exposed-modules:
+      GameSetup
+      Hitbox
       Keyboard
       Model
       Objects
+      RandomGenerations
       Utils
   other-modules:
       Paths_Xenon2_Megablast
@@ -70,6 +73,7 @@ test-suite Xenon2-Megablast-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      HitboxSpec
       ObjectsSpec
       UtilsSpec
       Paths_Xenon2_Megablast

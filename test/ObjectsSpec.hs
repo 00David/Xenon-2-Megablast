@@ -1,13 +1,5 @@
 module ObjectsSpec (
-    hitboxInitSpec,
-    collisionSpec,
-    commutativityCollisionSpec,
-    directionInitSpec,
-    objectInitSpec,
-    objectGetHitboxSpec,
-    objectGetDirectionSpec,
-    objectGetSpeedSpec,
-    wallInitSpec
+    spec
 )
 where
 
@@ -16,106 +8,21 @@ import Graphics.Gloss (Picture (Blank))
 import Test.Hspec
 import Test.QuickCheck
 
+import Hitbox
+import HitboxSpec(TestHitbox(getHitbox))
 import Objects
 
--- ============================================================
--- ====================== OBJECT HITBOXES =====================
--- ============================================================
-
-newtype TestHitbox = TestHitbox { getHitbox :: Hitbox } deriving (Eq, Show)
-instance Arbitrary TestHitbox where
-  arbitrary = oneof
-    [ TestHitbox <$> (Circle <$> arbitrary <*> arbitrary <*> (abs <$> arbitrary)) -- radius >= 0
-    , TestHitbox <$> (Rectangle <$> arbitrary <*> arbitrary <*> (getPositive <$> arbitrary) <*> (getPositive <$> arbitrary)) -- width > 0 && heigth > 0
-    --, TestHitbox <$> (Hitboxes <$> listOf (getHitbox <$> arbitrary))
-    ]
-
-prop_initHitboxCircle_preservesInvariant :: Int -> Int -> Int -> Property
-prop_initHitboxCircle_preservesInvariant x y r =
-    r >= 0 ==> prop_inv_hitbox (initHitboxCircle x y r)
-
-prop_initHitboxRectangle_preservesInvariant :: Int -> Int -> Int -> Int -> Property
-prop_initHitboxRectangle_preservesInvariant x y w h =
-    w > 0 && h > 0 ==> prop_inv_hitbox (initHitboxRectangle x y w h)
-
-prop_initHitboxes_preservesInvariant :: [TestHitbox] -> Bool
-prop_initHitboxes_preservesInvariant l = prop_inv_hitbox (initHitboxes (map getHitbox l))
-
-hitboxInitSpec :: SpecWith ()
-hitboxInitSpec = do
-    describe "initHitbox" $ do
-        it "preserves the Hitbox invariant for valid Circles" $
-            property prop_initHitboxCircle_preservesInvariant
-
-        it "preserves the Hitbox invariant for valid Rectangles" $
-            property prop_initHitboxRectangle_preservesInvariant
-
-        it "preserves the Hitbox invariant for a list of Hitboxes" $
-            property prop_initHitboxes_preservesInvariant
-
-collisionSpec :: Spec
-collisionSpec = do
-    describe "collision" $ do
-        -- Rectangle vs Rectangle
-        it "detects collision between overlapping rectangles" $ do
-            let r1 = Rectangle 0 0 10 10
-                r2 = Rectangle 5 5 10 10
-            collision r1 r2 `shouldBe` True
-
-        it "detects no collision when rectangles are apart" $ do
-            let r1 = Rectangle 0 0 10 10
-                r2 = Rectangle 20 20 5 5
-            collision r1 r2 `shouldBe` False
-
-        -- Circle vs Circle
-        it "detects collision between overlapping circles" $ do
-            let c1 = Circle 0 0 5
-                c2 = Circle 3 4 5 -- distance = 5, sum of radii = 10
-            collision c1 c2 `shouldBe` True
-
-        it "detects no collision when circles are apart" $ do
-            let c1 = Circle 0 0 5
-                c2 = Circle 20 0 5
-            collision c1 c2 `shouldBe` False
-
-        -- Circle vs Rectangle
-        it "detects collision when circle intersects rectangle" $ do
-            let c = Circle 5 5 5
-                r = Rectangle 8 8 10 10
-            collision c r `shouldBe` True
-
-        it "detects no collision when circle and rectangle are apart" $ do
-            let c = Circle 0 0 2
-                r = Rectangle 10 10 5 5
-            collision c r `shouldBe` False
-
-        -- Rectangle vs Circle (inverse order)
-        it "detects collision when rectangle intersects circle (inverse order)" $ do
-            let r = Rectangle 8 8 10 10
-                c = Circle 5 5 5
-            collision r c `shouldBe` True
-
-        -- Hitboxes list
-        it "detects collision when one hitbox in the list collides" $ do
-            let hlist = Hitboxes [Rectangle 0 0 10 10, Circle 20 20 5]
-                c = Circle 5 5 3
-            collision hlist c `shouldBe` True
-
-        it "detects no collision when none in the list collide" $ do
-            let hlist = Hitboxes [Rectangle 0 0 10 10, Circle 20 20 5]
-                c = Circle 50 50 3
-            collision hlist c `shouldBe` False
-
-test_prop_commutativity_collision :: TestHitbox -> TestHitbox -> Property
-test_prop_commutativity_collision h1 h2 = property (prop_commutativity_collision (getHitbox h1) (getHitbox h2))
-
-commutativityCollisionSpec :: Spec
-commutativityCollisionSpec = do
-    describe "prop_commutativity_collision" $ do
-        it "is symmetric (collision h1 h2 == collision h2 h1)" $
-            property test_prop_commutativity_collision
-
-
+spec :: Spec
+spec = do
+  directionInitSpec
+  objectInitSpec
+  objectGetHitboxSpec
+  objectGetDirectionSpec
+  objectGetSpeedSpec
+  moveObjectSpec
+  preMoveObjectSpec
+  postMoveObjectSpec
+  wallInitSpec
 
 -- ============================================================
 -- ====================== OBJECTS =============================
@@ -150,7 +57,7 @@ instance Arbitrary TestObject where
           [ return $ TestObject (MovableO Blank (getHitbox h) (getDirection d) s), 
           return $ TestObject (StaticO Blank (getHitbox h))]
 
-prop_initMovableObject_preservesInvariant :: TestHitbox -> TestDirection -> Int -> Property
+prop_initMovableObject_preservesInvariant :: TestHitbox -> TestDirection -> Float -> Property
 prop_initMovableObject_preservesInvariant h d s =
     s >= 0 ==> prop_inv_object (initMovableObject Blank (getHitbox h) (getDirection d) s) -- Blank : dummy picture
 
@@ -169,14 +76,14 @@ objectInitSpec = do
 
 objectGetHitboxSpec :: Spec
 objectGetHitboxSpec = do
-    describe "objectHitbox" $ do
-        it "objectHitbox returns the correct hitbox for MovableO" $ do
+    describe "objectHitbx" $ do
+        it "objectHitbx returns the correct hitbox for MovableO" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction 1 0
                 obj = MovableO Blank h d 5
             objectHitbox obj `shouldBe` h
 
-        it "objectHitbox returns the correct hitbox for StaticO" $ do
+        it "objectHitbx returns the correct hitbox for StaticO" $ do
             let h = Circle 5 5 3
                 obj = StaticO Blank h
             objectHitbox obj `shouldBe` h
@@ -209,6 +116,93 @@ objectGetSpeedSpec = do
                 obj = StaticO Blank h
             objectSpeed obj `shouldBe` 0
 
+moveObjectSpec :: Spec
+moveObjectSpec = do
+    describe "moveObject" $ do
+
+        it "moves MovableO according to direction and speed" $ do
+            let h = Rectangle 0 0 10 10
+                d = Direction 1 (-1)
+                s = 5
+                obj = MovableO Blank h d s
+                expected = MovableO Blank (Rectangle 5 (-5) 10 10) d s
+            moveObject obj 0 `shouldBe` expected
+
+        it "does not change direction for MovableO" $ do
+            let h = Circle 1 2 3
+                d = Direction (-1) 1
+                s = 3
+                obj = MovableO Blank h d s
+            case moveObject obj 0 of
+                MovableO _ _ d2 _ ->
+                    d2 `shouldBe` d
+                _ -> expectationFailure "Expected MovableO"
+
+        it "does not change speed for MovableO" $ do
+            let h = Circle 1 2 3
+                d = Direction 0 1
+                s = 7
+                obj = MovableO Blank h d s
+            case moveObject obj 0 of
+                MovableO _ _ _ s2 ->
+                    s2 `shouldBe` s
+                _ -> expectationFailure "Expected MovableO"
+
+        it "does not change picture for MovableO" $ do
+            let h = Rectangle 0 0 10 10
+                d = Direction 1 0
+                s = 2
+                obj = MovableO Blank h d s
+            case moveObject obj 0 of
+                MovableO p2 _ _ _ ->
+                    p2 `shouldBe` Blank
+                _ -> expectationFailure "Expected MovableO"
+
+        it "moves StaticO according to screen speed (downwards)" $ do
+            let h = Rectangle 0 10 5 5
+                obj = StaticO Blank h
+                screenS = 3
+                expected = StaticO Blank (Rectangle 0 7 5 5)
+            moveObject obj screenS `shouldBe` expected
+
+        it "does not change picture for StaticO" $ do
+            let h = Circle 5 5 2
+                obj = StaticO Blank h
+            case moveObject obj 10 of
+                StaticO p2 _ ->
+                    p2 `shouldBe` Blank
+                _ -> expectationFailure "Expected StaticO"
+
+        {--it "does not change hitbox shape for StaticO (only translation)" $ do
+            let h = Circle 1 1 4
+                obj = StaticO Blank h
+            case moveObject obj 10 of
+                StaticO _ h2 ->
+                    case (h, h2) of
+                        (Circle _ _ r1, Circle _ _ r2) ->
+                            r1 `shouldBe` r2
+                        _ -> expectationFailure "Expected Circle"--}
+
+test_prop_pre_moveObject :: TestObject -> Float -> Property
+test_prop_pre_moveObject (TestObject obj) screenS =
+    screenS >= 0 ==> prop_pre_moveObject obj screenS
+
+preMoveObjectSpec :: Spec
+preMoveObjectSpec = do
+    describe "prop_pre_moveObject" $ do
+        it "satisfies prop_pre_moveObject pre-condition for all valid Objects" $
+            property test_prop_pre_moveObject
+
+test_prop_post_moveObject :: TestObject -> Float -> Property
+test_prop_post_moveObject (TestObject obj) screenS =
+    prop_post_moveObject obj screenS === True
+
+postMoveObjectSpec :: Spec
+postMoveObjectSpec = do
+    describe "prop_post_moveObject" $ do
+        it "satisfies prop_pre_moveObject post-condition for all valid Objects" $
+            property test_prop_post_moveObject
+
 -- ============================================================
 -- ====================== WALLS ===============================
 -- ============================================================
@@ -230,7 +224,7 @@ instance Arbitrary TestWall where
             -- First parameter : the number of remaining rectangles to create
             -- Second parameter : (x, y) of the bottom left angle of the current Rectangle to create
             -- Third parameter : the list containing all objects of the wall so far created
-            mkRects :: Int -> (Int, Int) -> [Object] -> Gen [Object]
+            mkRects :: Int -> (Float, Float) -> [Object] -> Gen [Object]
             mkRects 0 _ acc = return (reverse acc)
             mkRects k (x,y) acc = do
                 -- each rectangle of the wall has its width / height randomly generated (strictly positive) 
@@ -238,7 +232,7 @@ instance Arbitrary TestWall where
                 h <- getPositive <$> arbitrary
                 let rect = Rectangle x y w h
                     xNext = x
-                    yNext = y + h `div` 2 -- vertical overlap
+                    yNext = y + h / 2 -- vertical overlap
                 mkRects (k-1) (xNext,yNext) (StaticO Blank rect : acc)
 
 

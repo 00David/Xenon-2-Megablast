@@ -1,12 +1,15 @@
 module UtilsSpec (
-    clampSpec
+    spec
 )
 where
 
 import Test.Hspec
---import Test.QuickCheck
 
 import Utils
+
+spec :: Spec
+spec = do
+  clampSpec
 
 clampSpec :: SpecWith ()
 clampSpec = do

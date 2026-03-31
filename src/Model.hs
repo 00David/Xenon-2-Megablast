@@ -3,6 +3,8 @@ module Model (module Model) where
 import Graphics.Gloss
 
 import Debug.Trace
+import Hitbox
+import GameSetup
 
 import Objects
 
@@ -13,7 +15,7 @@ data Player = Player {
 
 initPlayer :: Picture -> Player
 initPlayer pic = Player (initMovableObject pic 
-    (initHitboxRectangle (0-(widthPerso `div` 2)) (0-(heightPerso `div` 2)) widthPerso heightPerso)
+    (initHitboxRectangle (0-(widthPlayer / 2)) (0-(heightPlayer / 2)) widthPlayer heightPlayer)
     (Direction 0 0)
     0)
     3
@@ -23,47 +25,31 @@ data Ennemy = Ennemy {
     ennemyLifes :: Int -- ennemy remaining lifes
 } deriving (Show)
 
-widthScreen :: Int
-widthScreen = 1100
-heightScreen :: Int
-heightScreen = 700
-
-widthVirus :: Int
-widthVirus = 65
-heightVirus :: Int
-heightVirus = 64
-
-widthPerso :: Int
-widthPerso = 110
-heightPerso :: Int
-heightPerso = 76
-
 data GameState = GameState {
   player1 :: Player
-  , virusX :: Int
-  , virusY :: Int
-  , speed :: Int }
+  , virusX :: Float
+  , virusY :: Float}
   deriving (Show)
 
-initGameState :: Picture -> Int -> Int -> GameState
-initGameState picPlayer xVirus yVirus = GameState (initPlayer picPlayer) xVirus yVirus 3
+initGameState :: Picture -> Float -> Float -> GameState
+initGameState picPlayer xVirus yVirus = GameState (initPlayer picPlayer) xVirus yVirus
 
 
 movePlayer1 :: GameState -> GameState
-movePlayer1 gs@(GameState p1@(Player p1o _) _ _ screenSpeed) =
+movePlayer1 gs@(GameState p1@(Player p1o _) _ _) =
     --trace (show (objectDirection p1o)) $
     let (Direction dirxp1 diryp1) = objectDirection p1o
         s = objectSpeed p1o
-        dxp1 = dirxp1*s
-        dyp1 = diryp1*s
+        dxp1 = (fromIntegral dirxp1)*s
+        dyp1 = (fromIntegral diryp1)*s
     in case centerHitbox (objectHitbox p1o) of
         Just (p1x, p1y) -> 
             let newX = p1x + dxp1
                 newY = p1y + dyp1
-                leftBound = -(widthScreen `div` 2) + (widthPerso `div` 2)
-                rightBound = (widthScreen `div` 2) - (widthPerso `div` 2)
-                bottomBound = -(heightScreen `div` 2) + (heightPerso `div` 2)
-                topBound = (heightScreen `div` 2) - (heightPerso `div` 2)
+                leftBound = -((fromIntegral widthScreen) / 2) + (widthPlayer / 2)
+                rightBound = ((fromIntegral widthScreen) / 2) - (widthPlayer / 2)
+                bottomBound = -((fromIntegral heightScreen) / 2) + (heightPlayer / 2)
+                topBound = ((fromIntegral heightScreen) / 2) - (heightPlayer / 2)
             in if newX >= leftBound && newX <= rightBound &&
                   newY >= bottomBound && newY <= topBound
                then gs { player1 = p1 { playerObject = moveObject p1o screenSpeed } }
@@ -71,14 +57,14 @@ movePlayer1 gs@(GameState p1@(Player p1o _) _ _ screenSpeed) =
         Nothing -> error "player must have a center"
 
 collisionWithVirus :: GameState -> Bool
-collisionWithVirus (GameState (Player p1o _) vx vy _) = 
+collisionWithVirus (GameState (Player p1o _) vx vy) = 
 
     case centerHitbox (objectHitbox p1o) of
         Just (p1x, p1y) -> let
-                persoHalfW = widthPerso `div` 2
-                persoHalfH = heightPerso `div` 2
-                virusHalfW = widthVirus `div` 2
-                virusHalfH = heightVirus `div` 2
+                persoHalfW = widthPlayer / 2
+                persoHalfH = heightPlayer / 2
+                virusHalfW = widthVirus / 2
+                virusHalfH = heightVirus / 2
                 
                 persoLeft   = p1x - persoHalfW
                 persoRight  = p1x + persoHalfW
