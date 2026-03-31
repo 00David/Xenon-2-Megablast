@@ -13,11 +13,16 @@ data Player = Player {
     playerLifes :: Int -- player remaining lifes
 } deriving (Show)
 
-initPlayer :: Picture -> Player
-initPlayer pic = Player (initMovableObject pic 
-    (initHitboxRectangle (0-(widthPlayer / 2)) (0-(heightPlayer / 2)) widthPlayer heightPlayer)
-    (Direction 0 0)
-    0)
+playerPicture :: Player -> Picture
+playerPicture (Player o _) = objectPicture o
+
+initPlayer :: Picture -> Float -> Float -> Player
+initPlayer pic x y = Player 
+    (initMovableObject pic 
+        (initHitboxRectangle (x-(widthPlayer / 2)) (y-(heightPlayer / 2)) widthPlayer heightPlayer)
+        (Direction 0 0)
+        0
+    )
     3
 
 data Ennemy = Ennemy {
@@ -25,18 +30,33 @@ data Ennemy = Ennemy {
     ennemyLifes :: Int -- ennemy remaining lifes
 } deriving (Show)
 
-data GameState = GameState {
-  player1 :: Player
-  , virusX :: Float
-  , virusY :: Float}
-  deriving (Show)
+ennemyPicture :: Ennemy -> Picture
+ennemyPicture (Ennemy o _) = objectPicture o
 
-initGameState :: Picture -> Float -> Float -> GameState
-initGameState picPlayer xVirus yVirus = GameState (initPlayer picPlayer) xVirus yVirus
+data GameState = 
+    StartMenu StartMenuOption
+    | InGame InGameInfos
+    deriving (Show)
+
+data StartMenuOption = Start | Option2
+    deriving (Show, Eq)
+
+data InGameInfos = InGameInfos {
+        player1 :: Player
+        , virusX :: Float
+        , virusY :: Float
+    } deriving (Show)
+  
+
+initStartMenu :: StartMenuOption -> GameState
+initStartMenu option = StartMenu option
+
+initInGame :: Picture -> Float -> Float -> Float -> Float -> GameState
+initInGame picPlayer xVirus yVirus xP1 yP1 = InGame (InGameInfos (initPlayer picPlayer xP1 yP1) xVirus yVirus)
 
 
-movePlayer1 :: GameState -> GameState
-movePlayer1 gs@(GameState p1@(Player p1o _) _ _) =
+movePlayer1 :: InGameInfos -> InGameInfos
+movePlayer1 gi@(InGameInfos p1@(Player p1o _) _ _) =
     --trace (show (objectDirection p1o)) $
     let (Direction dirxp1 diryp1) = objectDirection p1o
         s = objectSpeed p1o
@@ -52,12 +72,12 @@ movePlayer1 gs@(GameState p1@(Player p1o _) _ _) =
                 topBound = ((fromIntegral heightScreen) / 2) - (heightPlayer / 2)
             in if newX >= leftBound && newX <= rightBound &&
                   newY >= bottomBound && newY <= topBound
-               then gs { player1 = p1 { playerObject = moveObject p1o screenSpeed } }
-               else gs
+               then gi { player1 = p1 { playerObject = moveObject p1o screenSpeed } }
+               else gi
         Nothing -> error "player must have a center"
 
-collisionWithVirus :: GameState -> Bool
-collisionWithVirus (GameState (Player p1o _) vx vy) = 
+collisionWithVirus :: InGameInfos -> Bool
+collisionWithVirus (InGameInfos (Player p1o _) vx vy) = 
 
     case centerHitbox (objectHitbox p1o) of
         Just (p1x, p1y) -> let

@@ -30,6 +30,7 @@ library
       Keyboard
       Model
       Objects
+      PictureUtils
       RandomGenerations
       Utils
   other-modules:

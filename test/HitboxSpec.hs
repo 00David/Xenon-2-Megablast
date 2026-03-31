@@ -11,7 +11,7 @@ import Hitbox
 
 spec :: Spec
 spec = do
-  hitboxInitSpec
+  initHitboxSpec
   centerHitboxSpec
   collisionSpec
   commutativityCollisionSpec
@@ -41,8 +41,8 @@ prop_initHitboxRectangle_preservesInvariant x y w h =
 prop_initHitboxes_preservesInvariant :: [TestHitbox] -> Property
 prop_initHitboxes_preservesInvariant l = length l > 0 ==> prop_inv_hitbox (initHitboxes (map getHitbox l))
 
-hitboxInitSpec :: SpecWith ()
-hitboxInitSpec = do
+initHitboxSpec :: SpecWith ()
+initHitboxSpec = do
     describe "initHitbox" $ do
         it "preserves the Hitbox invariant for valid Circles" $
             property prop_initHitboxCircle_preservesInvariant

@@ -6,8 +6,6 @@ import qualified Data.Set as S
 
 import Debug.Trace
 
-import Model
-
 type Keyboard = Set Key
 
 initKeyboard :: Keyboard

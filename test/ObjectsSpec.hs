@@ -14,8 +14,8 @@ import Objects
 
 spec :: Spec
 spec = do
-  directionInitSpec
-  objectInitSpec
+  initDirectionSpec
+  initObjectSpec
   objectGetHitboxSpec
   objectGetDirectionSpec
   objectGetSpeedSpec
@@ -41,9 +41,9 @@ prop_initDirection_preservesInvariant =
   forAll (elements [-1,0,1]) $ \y ->
     prop_inv_direction (initDirection x y)
 
-directionInitSpec :: SpecWith ()
-directionInitSpec = do
-    describe "directionInit" $ do
+initDirectionSpec :: SpecWith ()
+initDirectionSpec = do
+    describe "initDirection" $ do
         it "preserves the Direction invariant for valid Directions" $
             property prop_initDirection_preservesInvariant
 
@@ -65,8 +65,8 @@ prop_initStaticObject_preservesInvariant :: TestHitbox -> Property
 prop_initStaticObject_preservesInvariant h = 
     property $ prop_inv_object (initStaticObject Blank (getHitbox h)) -- Blank : dummy picture
 
-objectInitSpec :: SpecWith ()
-objectInitSpec = do
+initObjectSpec :: SpecWith ()
+initObjectSpec = do
     describe "initObject" $ do
         it "preserves the Movable Object invariant for valid Movable Objects" $
             property prop_initMovableObject_preservesInvariant
@@ -119,69 +119,31 @@ objectGetSpeedSpec = do
 moveObjectSpec :: Spec
 moveObjectSpec = do
     describe "moveObject" $ do
-
         it "moves MovableO according to direction and speed" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction 1 (-1)
                 s = 5
                 obj = MovableO Blank h d s
-                expected = MovableO Blank (Rectangle 5 (-5) 10 10) d s
-            moveObject obj 0 `shouldBe` expected
+            moveObject obj 0 `shouldBe` (MovableO Blank (Rectangle 5 (-5) 10 10) d s)
 
-        it "does not change direction for MovableO" $ do
-            let h = Circle 1 2 3
-                d = Direction (-1) 1
-                s = 3
-                obj = MovableO Blank h d s
-            case moveObject obj 0 of
-                MovableO _ _ d2 _ ->
-                    d2 `shouldBe` d
-                _ -> expectationFailure "Expected MovableO"
-
-        it "does not change speed for MovableO" $ do
-            let h = Circle 1 2 3
-                d = Direction 0 1
-                s = 7
-                obj = MovableO Blank h d s
-            case moveObject obj 0 of
-                MovableO _ _ _ s2 ->
-                    s2 `shouldBe` s
-                _ -> expectationFailure "Expected MovableO"
-
-        it "does not change picture for MovableO" $ do
+        it "does not move MovableO if direction  is (0, 0)" $ do
             let h = Rectangle 0 0 10 10
-                d = Direction 1 0
-                s = 2
+                d = Direction 0 0
+                s = 5
                 obj = MovableO Blank h d s
-            case moveObject obj 0 of
-                MovableO p2 _ _ _ ->
-                    p2 `shouldBe` Blank
-                _ -> expectationFailure "Expected MovableO"
+            moveObject obj 0 `shouldBe` (MovableO Blank (Rectangle 0 0 10 10) d s)
 
         it "moves StaticO according to screen speed (downwards)" $ do
             let h = Rectangle 0 10 5 5
                 obj = StaticO Blank h
                 screenS = 3
-                expected = StaticO Blank (Rectangle 0 7 5 5)
-            moveObject obj screenS `shouldBe` expected
+            moveObject obj screenS `shouldBe` (StaticO Blank (Rectangle 0 7 5 5))
 
-        it "does not change picture for StaticO" $ do
-            let h = Circle 5 5 2
+        it "does not move StaticO if screen speed is 0" $ do
+            let h = Rectangle 0 10 5 5
                 obj = StaticO Blank h
-            case moveObject obj 10 of
-                StaticO p2 _ ->
-                    p2 `shouldBe` Blank
-                _ -> expectationFailure "Expected StaticO"
-
-        {--it "does not change hitbox shape for StaticO (only translation)" $ do
-            let h = Circle 1 1 4
-                obj = StaticO Blank h
-            case moveObject obj 10 of
-                StaticO _ h2 ->
-                    case (h, h2) of
-                        (Circle _ _ r1, Circle _ _ r2) ->
-                            r1 `shouldBe` r2
-                        _ -> expectationFailure "Expected Circle"--}
+                screenS = 0
+            moveObject obj screenS `shouldBe` (StaticO Blank (Rectangle 0 10 5 5))
 
 test_prop_pre_moveObject :: TestObject -> Float -> Property
 test_prop_pre_moveObject (TestObject obj) screenS =
@@ -190,7 +152,7 @@ test_prop_pre_moveObject (TestObject obj) screenS =
 preMoveObjectSpec :: Spec
 preMoveObjectSpec = do
     describe "prop_pre_moveObject" $ do
-        it "satisfies prop_pre_moveObject pre-condition for all valid Objects" $
+        it "satisfies moveObject pre-condition for all valid Objects" $
             property test_prop_pre_moveObject
 
 test_prop_post_moveObject :: TestObject -> Float -> Property
@@ -200,7 +162,7 @@ test_prop_post_moveObject (TestObject obj) screenS =
 postMoveObjectSpec :: Spec
 postMoveObjectSpec = do
     describe "prop_post_moveObject" $ do
-        it "satisfies prop_pre_moveObject post-condition for all valid Objects" $
+        it "satisfies moveObject post-condition for all valid Objects" $
             property test_prop_post_moveObject
 
 -- ============================================================
@@ -235,12 +197,9 @@ instance Arbitrary TestWall where
                     yNext = y + h / 2 -- vertical overlap
                 mkRects (k-1) (xNext,yNext) (StaticO Blank rect : acc)
 
-
--- Propriétés pour les tests QuickCheck
 prop_wall_preservesInvariant :: TestWall -> Bool
 prop_wall_preservesInvariant (TestWall (Wall objs)) = prop_inv_wall objs
 
--- Spec pour les murs
 wallInitSpec :: Spec
 wallInitSpec = do
     describe "initWall" $ do
