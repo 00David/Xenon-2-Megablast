@@ -6,9 +6,9 @@ import Utils
 -- ====================== OBJECT HITBOXES =====================
 -- ============================================================
 
-data Hitbox = Circle Float Float Float -- x y center coordinates + radius
-    | Rectangle Float Float Float Float  -- x y bottom-left coordinates + width + heigth
-    | Hitboxes [Hitbox] -- a list of hitboxes
+data Hitbox = Circle Float Float Float -- x y center coordinates + radius. Radius >= 0.
+    | Rectangle Float Float Float Float  -- x y bottom-left coordinates + width + heigth. Width > 0 and heigth > 0.
+    | Hitboxes [Hitbox] -- a list of hitboxes. length > 0.
     deriving (Eq, Show)
 
 prop_inv_hitbox :: Hitbox -> Bool
@@ -30,27 +30,27 @@ initHitboxes l
     | length l == 0 = error "must have at least 1 hitbox"
     | otherwise = (Hitboxes l)
 
--- Gives the (x,y) center of the Hitbox, or nothing if it is for Hitboxes
+-- Gives the (x,y) center of the Hitbox, or nothing if it is for 'Hitboxes'
 centerHitbox :: Hitbox -> Maybe (Float, Float)
 centerHitbox (Circle x y _) = Just (x,y)
 centerHitbox (Rectangle x y w h) = Just (x + (w / 2), y + (h / 2))
 centerHitbox _ = Nothing
 
 -- Detects if there is a collision between 2 hitboxes
-collision :: Hitbox -> Hitbox -> Bool
-collision (Rectangle x1 y1 w1 h1) (Rectangle x2 y2 w2 h2) =
+collisionHitbox :: Hitbox -> Hitbox -> Bool
+collisionHitbox (Rectangle x1 y1 w1 h1) (Rectangle x2 y2 w2 h2) =
     not (x1 + w1 < x2 ||  -- r1 completely at left of r2
          x2 + w2 < x1 ||  -- r2 completely at rigth of r1
          y1 + h1 < y2 ||  -- r1 completely under r2
          y2 + h2 < y1)
-collision (Circle x1 y1 r1) (Circle x2 y2 r2) = 
+collisionHitbox (Circle x1 y1 r1) (Circle x2 y2 r2) = 
     let
         dx = x1 - x2
         dy = y1 - y2
         r = r1 + r2
     in
         dx*dx + dy*dy <= r*r
-collision (Circle x1 y1 r1) (Rectangle x2 y2 w2 h2) = 
+collisionHitbox (Circle x1 y1 r1) (Rectangle x2 y2 w2 h2) = 
     let
         closestX = clamp x1 x2 (x2 + w2)
         closestY = clamp y1 y2 (y2 + h2)
@@ -58,7 +58,7 @@ collision (Circle x1 y1 r1) (Rectangle x2 y2 w2 h2) =
         dy = y1 - closestY
     in
         (x1 - closestX) * dx + dy * dy <= r1 * r1
-collision (Rectangle x2 y2 w2 h2) (Circle x1 y1 r1) = 
+collisionHitbox (Rectangle x2 y2 w2 h2) (Circle x1 y1 r1) = 
     let
         closestX = clamp x1 x2 (x2 + w2)
         closestY = clamp y1 y2 (y2 + h2)
@@ -66,17 +66,17 @@ collision (Rectangle x2 y2 w2 h2) (Circle x1 y1 r1) =
         dy = y1 - closestY
     in
         (x1 - closestX) * dx + dy * dy <= r1 * r1
-collision (Hitboxes l) h2 = foldr (\h1 acc -> (collision h1 h2) || acc) False l
-collision h2 (Hitboxes l) = foldr (\h1 acc -> (collision h1 h2) || acc) False l
+collisionHitbox (Hitboxes l) h2 = foldr (\h1 acc -> (collisionHitbox h1 h2) || acc) False l
+collisionHitbox h2 (Hitboxes l) = foldr (\h1 acc -> (collisionHitbox h1 h2) || acc) False l
 
-prop_commutativity_collision :: Hitbox -> Hitbox -> Bool
-prop_commutativity_collision h1 h2 = (prop_inv_hitbox h1 && prop_inv_hitbox h2) ==> (collision h1 h2 == collision h2 h1)
+prop_commutativity_collisionHitbox :: Hitbox -> Hitbox -> Bool
+prop_commutativity_collisionHitbox h1 h2 = (prop_inv_hitbox h1 && prop_inv_hitbox h2) ==> (collisionHitbox h1 h2 == collisionHitbox h2 h1)
 
 -- Moves a hitbox, depending on x and y components of a vector, given as second argument
 moveHitbox :: Hitbox -> (Float, Float) -> Hitbox
-moveHitbox (Circle x y r) (dx,dy) = (Circle (x+dx) (y+dy) r)
-moveHitbox (Rectangle x y w h) (dx,dy) = (Rectangle (x+dx) (y+dy) w h)
-moveHitbox (Hitboxes l) (dx,dy) = (Hitboxes (map (\h -> moveHitbox h (dx,dy)) l))
+moveHitbox (Circle x y r) (dx,dy) = (initHitboxCircle (x+dx) (y+dy) r)
+moveHitbox (Rectangle x y w h) (dx,dy) = (initHitboxRectangle (x+dx) (y+dy) w h)
+moveHitbox (Hitboxes l) (dx,dy) = (initHitboxes (map (\h -> moveHitbox h (dx,dy)) l))
 
 prop_post_moveHitbox :: Hitbox -> (Float, Float) -> Bool
 prop_post_moveHitbox (Circle x y r) (dx,dy) =

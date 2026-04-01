@@ -13,8 +13,6 @@ import Hitbox
 import GameSetup
 import RandomGenerations
 import PictureUtils
-import qualified Data.Sequence as Seq
-import Data.Sequence (Seq)
 
 -- GameControl initialisation
 
@@ -31,8 +29,8 @@ initGame = do
     }
 
 -- Rendering
-renderIO :: Picture -> Picture -> [Picture] -> GameControl -> IO Picture
-renderIO bgnd virus blasters (GameControl _ gs) = 
+renderIO :: Picture -> [Picture] -> GameControl -> IO Picture
+renderIO bgnd boosters (GameControl _ gs) = 
     case gs of
         -- Start menu
         StartMenu option ->
@@ -48,13 +46,13 @@ renderIO bgnd virus blasters (GameControl _ gs) =
                 select2 = Translate xSelect2 ySelect (Scale 0.3 0.3 (Color white (Text "<")))
             in return (Pictures [bgnd, subtitle, title, textOption1, textOption2, select1, select2])
         -- In game
-        InGame (InGameInfos p1 vx vy) ->
+        InGame (InGameInfos p1 enemies) ->
             let p1o = playerObject p1
-                (Direction xdirp1 ydirp1) = objectDirection p1o 
             in case centerHitbox (objectHitbox p1o) of
                 Just (p1x, p1y) -> do
-                    let blastersEnbled = blastersEnabled blasters p1 -- get the sprites of the enabled spaceship blasters
-                    return (Pictures ([bgnd]++blastersEnbled++[Translate p1x p1y (objectPicture p1o), Translate vx vy virus]))
+                    let picturesBoosters = boostersEnabled boosters p1 -- get the sprites of the enabled spaceship boosters
+                        picturesEnemies = translateEnemyPictures enemies -- get the sprites of the enemies
+                    return (Pictures ([bgnd]++picturesBoosters++[Translate p1x p1y (objectPicture p1o)]++picturesEnemies))
                 Nothing -> error "player must have a center"
   
 -- Event handling
@@ -70,9 +68,10 @@ handleEventsIO ev (GameControl kbd gs) = do
                 then do
                     (vx, vy) <- generateVirusCoordinates
                     spaceshipP1 <- loadPNG "./assets/spaceship/spaceship_norm.png"
+                    virusPic <- loadBMP "./assets/virus.bmp"
                     return GameControl {
                         keyboard = initKeyboard,
-                        state = initInGame spaceshipP1 vx vy 0 0
+                        state = startInitInGame spaceshipP1 virusPic vx vy 0 0
                     }
                 else 
                     case (isKeyDown (SpecialKey KeyUp) newKBD, isKeyDown (SpecialKey KeyDown) newKBD, option) of
@@ -97,32 +96,29 @@ updateIO deltaTime (GameControl kbd gs) = do
         -- Start menu
         StartMenu _ -> return (GameControl kbd gs)
         -- In game
-        InGame ig1@(InGameInfos p1@(Player p1o _) _ _) ->
-            let xdirp1 = case (isKeyDown (SpecialKey KeyLeft) kbd, isKeyDown (SpecialKey KeyRight) kbd) of
-                            (True, False) -> -1
-                            (False, True) -> 1
-                            _ -> 0
-                ydirp1 = case (isKeyDown (SpecialKey KeyUp) kbd, isKeyDown (SpecialKey KeyDown) kbd) of
-                            (True, False) -> 1
-                            (False, True) -> -1
-                            _ -> 0
-                picp1 = objectPicture p1o
-                hp1 = objectHitbox p1o
-                sp1 = if xdirp1 /= 0 || ydirp1 /= 0 then playerSpeed*deltaTime else 0
-            
-                --trace (show (Direction xdirp1 ydirp1)) $
+        InGame ig1@(InGameInfos p1 _) ->
+            let 
+                -- player1 updated direction and speed
 
-                -- direction and speed player1 updates
-                ig2 = ig1{ player1=p1{ playerObject = MovableO picp1 hp1 (Direction xdirp1 ydirp1) sp1 } }
+                (newDirP1, newObjectSpeedP1) = player1NewDirectionSpeed kbd deltaTime
+                p1V2 = setPlayerDirectionSpeed p1 (newDirP1, newObjectSpeedP1)
 
-                -- player1 position update
-                ig3 = movePlayer1 ig2
+                -- player1 updated position
+                newPlayer1 = updatePlayer p1V2
+                ig2 = ig1{ gamePlayer1=newPlayer1 }
+
+                -- collided enemies deleted from the GameState
+                ig3 = handleCollisionP1WithEnemies ig2
 
             in
             -- in case of collision with the virus, moves it elsewhere
-            if collisionWithVirus ig3 then trace "VIRUS DETRUIT !" $ do
+            if length (gameEnemies ig3) == 0 then trace "VIRUS DETRUIT !" $ do
                 (newVX, newVY) <- generateVirusCoordinates
-                return (GameControl kbd (InGame(ig3{virusX = newVX, virusY = newVY})))
+                virusPic <- loadBMP "./assets/virus.bmp"
+                let newVo = initStaticEnnemyRectangleObject virusPic newVX newVY
+                    newV = initEnnemy newVo 1
+                    newEnemies = [newV]
+                return (GameControl kbd (initInGame(initInGameInfos (gamePlayer1 ig3) newEnemies)))
             else
                 return (GameControl kbd (InGame ig3))
 
@@ -130,13 +126,12 @@ updateIO deltaTime (GameControl kbd gs) = do
 main :: IO ()
 main = do
     bgnd <- loadPNG "./assets/Starfield.png"
-    virus <- loadBMP "./assets/virus.bmp"
-    -- spaceship blasters are loaded into an array
-    blasters <- sequence 
-        [ loadPNG "./assets/spaceship/blaster_left.png"
-        , loadPNG "./assets/spaceship/blaster_right.png"
-        , loadPNG "./assets/spaceship/blaster_top_left.png"
-        , loadPNG "./assets/spaceship/blaster_top_right.png"
+    -- spaceship boosters are loaded into an array
+    boosters <- sequence 
+        [ loadPNG "./assets/spaceship/booster_left.png"
+        , loadPNG "./assets/spaceship/booster_right.png"
+        , loadPNG "./assets/spaceship/booster_top_left.png"
+        , loadPNG "./assets/spaceship/booster_top_right.png"
         ]
     initCtrl <- initGame
     playIO 
@@ -144,6 +139,6 @@ main = do
         black 
         framesPerSecond
         initCtrl
-        (renderIO bgnd virus blasters)
+        (renderIO bgnd boosters)
         handleEventsIO
         updateIO

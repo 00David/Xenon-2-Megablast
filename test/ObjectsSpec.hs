@@ -15,7 +15,9 @@ import Objects
 spec :: Spec
 spec = do
   initDirectionSpec
+  initObjectSpeedSpec
   initObjectSpec
+  objectGetPictureSpec
   objectGetHitboxSpec
   objectGetDirectionSpec
   objectGetSpeedSpec
@@ -47,19 +49,35 @@ initDirectionSpec = do
         it "preserves the Direction invariant for valid Directions" $
             property prop_initDirection_preservesInvariant
 
+
+newtype TestObjectSpeed = TestObjectSpeed { getObjectSpeed :: ObjectSpeed } deriving (Eq, Show)
+instance Arbitrary TestObjectSpeed where
+    arbitrary = TestObjectSpeed . ObjectSpeed <$> arbitrary `suchThat` (>= 0)
+
+prop_initObjectSpeed_preservesInvariant :: Float -> Property
+prop_initObjectSpeed_preservesInvariant s =
+  s >= 0 ==> prop_inv_objectSpeed (initObjectSpeed s)
+
+initObjectSpeedSpec :: SpecWith ()
+initObjectSpeedSpec = do
+    describe "initObjectSpeed" $ do
+        it "preserves the ObjectSpeed invariant for valid ObjectSpeeds" $
+            property prop_initObjectSpeed_preservesInvariant
+
+
 newtype TestObject = TestObject { getObject :: Object } deriving (Eq, Show)
 instance Arbitrary TestObject where
     arbitrary = do
         h <- arbitrary :: Gen TestHitbox
         d <- arbitrary :: Gen TestDirection
-        s <- getNonNegative <$> arbitrary
+        s <- arbitrary :: Gen TestObjectSpeed
         oneof
-          [ return $ TestObject (MovableO Blank (getHitbox h) (getDirection d) s), 
+          [ return $ TestObject (MovableO Blank (getHitbox h) (getDirection d) (getObjectSpeed s)), 
           return $ TestObject (StaticO Blank (getHitbox h))]
 
-prop_initMovableObject_preservesInvariant :: TestHitbox -> TestDirection -> Float -> Property
+prop_initMovableObject_preservesInvariant :: TestHitbox -> TestDirection -> TestObjectSpeed -> Property
 prop_initMovableObject_preservesInvariant h d s =
-    s >= 0 ==> prop_inv_object (initMovableObject Blank (getHitbox h) (getDirection d) s) -- Blank : dummy picture
+    property $ prop_inv_object (initMovableObject Blank (getHitbox h) (getDirection d) (getObjectSpeed s)) -- Blank : dummy picture
 
 prop_initStaticObject_preservesInvariant :: TestHitbox -> Property
 prop_initStaticObject_preservesInvariant h = 
@@ -74,13 +92,29 @@ initObjectSpec = do
         it "preserves the Static Object invariant for valid Static Objects" $
             property prop_initStaticObject_preservesInvariant
 
+objectGetPictureSpec :: Spec
+objectGetPictureSpec = do
+    describe "objectPicture" $ do
+        it "objectPicture returns the correct picture for MovableO" $ do
+            let h = Rectangle 0 0 10 10
+                d = Direction 1 0
+                s = (ObjectSpeed 5)
+                obj = MovableO Blank h d s
+            objectPicture obj `shouldBe` Blank
+
+        it "objectPicture returns the correct picture for StaticO" $ do
+            let h = Circle 5 5 3
+                obj = StaticO Blank h
+            objectPicture obj `shouldBe` Blank
+
 objectGetHitboxSpec :: Spec
 objectGetHitboxSpec = do
     describe "objectHitbx" $ do
         it "objectHitbx returns the correct hitbox for MovableO" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction 1 0
-                obj = MovableO Blank h d 5
+                s = (ObjectSpeed 5)
+                obj = MovableO Blank h d s
             objectHitbox obj `shouldBe` h
 
         it "objectHitbx returns the correct hitbox for StaticO" $ do
@@ -94,7 +128,8 @@ objectGetDirectionSpec = do
         it "objectDirection returns the correct direction for MovableO" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction (-1) 1
-                obj = MovableO Blank h d 7
+                s = (ObjectSpeed 7)
+                obj = MovableO Blank h d s
             objectDirection obj `shouldBe` d
 
         it "objectDirection returns (0,0) for StaticO" $ do
@@ -108,13 +143,14 @@ objectGetSpeedSpec = do
         it "objectSpeed returns the correct speed for MovableO" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction 0 1
-                obj = MovableO Blank h d 42
-            objectSpeed obj `shouldBe` 42
+                s = (ObjectSpeed 42)
+                obj = MovableO Blank h d s
+            objectSpeed obj `shouldBe` s
 
         it "objectSpeed returns 0 for StaticO" $ do
             let h = Circle 1 1 5
                 obj = StaticO Blank h
-            objectSpeed obj `shouldBe` 0
+            objectSpeed obj `shouldBe` (ObjectSpeed 0)
 
 moveObjectSpec :: Spec
 moveObjectSpec = do
@@ -122,14 +158,14 @@ moveObjectSpec = do
         it "moves MovableO according to direction and speed" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction 1 (-1)
-                s = 5
+                s = (ObjectSpeed 5)
                 obj = MovableO Blank h d s
             moveObject obj 0 `shouldBe` (MovableO Blank (Rectangle 5 (-5) 10 10) d s)
 
         it "does not move MovableO if direction  is (0, 0)" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction 0 0
-                s = 5
+                s = (ObjectSpeed 5)
                 obj = MovableO Blank h d s
             moveObject obj 0 `shouldBe` (MovableO Blank (Rectangle 0 0 10 10) d s)
 

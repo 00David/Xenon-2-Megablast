@@ -11,6 +11,15 @@ widthScreen = 1100
 heightScreen :: Int
 heightScreen = 700
 
+leftXScreenBound :: Float
+leftXScreenBound = -((fromIntegral widthScreen) / 2)
+rightXScreenBound :: Float
+rightXScreenBound = ((fromIntegral widthScreen) / 2)
+topYScreenBound :: Float
+topYScreenBound = ((fromIntegral heightScreen) / 2)
+bottomYScreenBound :: Float
+bottomYScreenBound = -((fromIntegral heightScreen) / 2)
+
 widthVirus :: Float
 widthVirus = 65
 heightVirus :: Float
@@ -37,11 +46,11 @@ loadPNG path = do
 -- ========================= SPEEDS ===========================
 -- ============================================================
 
-screenSpeed :: Float
-screenSpeed = 3
+screenDefaultSpeed :: Float
+screenDefaultSpeed = 3
 
-playerSpeed :: Float
-playerSpeed = 300 -- pixels / second
+playerDefaultSpeed :: Float
+playerDefaultSpeed = 300 -- pixels / second
 
 framesPerSecond :: Int
 framesPerSecond = 60

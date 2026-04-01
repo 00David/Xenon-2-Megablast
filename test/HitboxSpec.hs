@@ -13,8 +13,8 @@ spec :: Spec
 spec = do
   initHitboxSpec
   centerHitboxSpec
-  collisionSpec
-  commutativityCollisionSpec
+  collisionHitboxSpec
+  commutativityCollisionHitboxSpec
   moveHitboxSpec
   postMoveHitboxSpec
 
@@ -69,67 +69,67 @@ centerHitboxSpec = do
             let h = Hitboxes [Circle 0 0 1]
             centerHitbox h `shouldBe` Nothing
 
-collisionSpec :: Spec
-collisionSpec = do
-    describe "collision" $ do
+collisionHitboxSpec :: Spec
+collisionHitboxSpec = do
+    describe "collisionHitbox" $ do
         -- Rectangle vs Rectangle
         it "detects collision between overlapping rectangles" $ do
             let r1 = Rectangle 0 0 10 10
                 r2 = Rectangle 5 5 10 10
-            collision r1 r2 `shouldBe` True
+            collisionHitbox r1 r2 `shouldBe` True
 
         it "detects no collision when rectangles are apart" $ do
             let r1 = Rectangle 0 0 10 10
                 r2 = Rectangle 20 20 5 5
-            collision r1 r2 `shouldBe` False
+            collisionHitbox r1 r2 `shouldBe` False
 
         -- Circle vs Circle
         it "detects collision between overlapping circles" $ do
             let c1 = Circle 0 0 5
                 c2 = Circle 3 4 5 -- distance = 5, sum of radii = 10
-            collision c1 c2 `shouldBe` True
+            collisionHitbox c1 c2 `shouldBe` True
 
         it "detects no collision when circles are apart" $ do
             let c1 = Circle 0 0 5
                 c2 = Circle 20 0 5
-            collision c1 c2 `shouldBe` False
+            collisionHitbox c1 c2 `shouldBe` False
 
         -- Circle vs Rectangle
         it "detects collision when circle intersects rectangle" $ do
             let c = Circle 5 5 5
                 r = Rectangle 8 8 10 10
-            collision c r `shouldBe` True
+            collisionHitbox c r `shouldBe` True
 
         it "detects no collision when circle and rectangle are apart" $ do
             let c = Circle 0 0 2
                 r = Rectangle 10 10 5 5
-            collision c r `shouldBe` False
+            collisionHitbox c r `shouldBe` False
 
         -- Rectangle vs Circle (inverse order)
         it "detects collision when rectangle intersects circle (inverse order)" $ do
             let r = Rectangle 8 8 10 10
                 c = Circle 5 5 5
-            collision r c `shouldBe` True
+            collisionHitbox r c `shouldBe` True
 
         -- Hitboxes list
         it "detects collision when one hitbox in the list collides" $ do
             let hlist = Hitboxes [Rectangle 0 0 10 10, Circle 20 20 5]
                 c = Circle 5 5 3
-            collision hlist c `shouldBe` True
+            collisionHitbox hlist c `shouldBe` True
 
         it "detects no collision when none in the list collide" $ do
             let hlist = Hitboxes [Rectangle 0 0 10 10, Circle 20 20 5]
                 c = Circle 50 50 3
-            collision hlist c `shouldBe` False
+            collisionHitbox hlist c `shouldBe` False
 
-test_prop_commutativity_collision :: TestHitbox -> TestHitbox -> Property
-test_prop_commutativity_collision h1 h2 = property (prop_commutativity_collision (getHitbox h1) (getHitbox h2))
+test_prop_commutativity_collisionHitbox :: TestHitbox -> TestHitbox -> Property
+test_prop_commutativity_collisionHitbox h1 h2 = property (prop_commutativity_collisionHitbox (getHitbox h1) (getHitbox h2))
 
-commutativityCollisionSpec :: Spec
-commutativityCollisionSpec = do
-    describe "prop_commutativity_collision" $ do
-        it "is symmetric (collision h1 h2 == collision h2 h1)" $
-            property test_prop_commutativity_collision
+commutativityCollisionHitboxSpec :: Spec
+commutativityCollisionHitboxSpec = do
+    describe "prop_commutativity_collisionHitbox" $ do
+        it "is symmetric (collisionHitbox h1 h2 == collisionHitbox h2 h1)" $
+            property test_prop_commutativity_collisionHitbox
 
 moveHitboxSpec :: Spec
 moveHitboxSpec = do
