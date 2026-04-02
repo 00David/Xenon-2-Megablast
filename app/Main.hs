@@ -74,11 +74,16 @@ handleEventsIO ev (GameControl kbd gs) = do
                         state = startInitInGame spaceshipP1 virusPic vx vy 0 0
                     }
                 else 
-                    case (isKeyDown (SpecialKey KeyUp) newKBD, isKeyDown (SpecialKey KeyDown) newKBD, option) of
-                    (True, True, _) -> return (GameControl newKBD gs)
-                    (_, True, Start) -> return (GameControl newKBD (initStartMenu Option2))
-                    (True, _, Option2) -> return (GameControl newKBD (initStartMenu Start))
-                    _ -> return (GameControl newKBD gs)
+                    if isKeyDown (SpecialKey KeyEsc) newKBD
+                        then do
+                            putStrLn "Exiting..."
+                            error "EXIT"
+                        else
+                            case (isKeyDown (SpecialKey KeyUp) newKBD, isKeyDown (SpecialKey KeyDown) newKBD, option) of
+                            (True, True, _) -> return (GameControl newKBD gs)
+                            (_, True, Start) -> return (GameControl newKBD (initStartMenu Option2))
+                            (True, _, Option2) -> return (GameControl newKBD (initStartMenu Start))
+                            _ -> return (GameControl newKBD gs)
         -- In game
         InGame _ -> 
             -- if the "Escape" key is pressed while in game, we're back to the start menu
