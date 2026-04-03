@@ -160,4 +160,9 @@ keepAliveEnemies player (enemy:xs)
 handleCollisionP1WithEnemies :: InGameInfos -> InGameInfos
 handleCollisionP1WithEnemies (InGameInfos player1 listEnemies) = 
     let newEnemies = keepAliveEnemies player1 listEnemies
-    in (initInGameInfos player1 newEnemies)
+        enemiesCollided = (length listEnemies) - (length newEnemies)
+        po = (playerObject player1)
+        newLifes = (playerLifes player1)
+        newHealth = (playerHealth player1) - enemiesCollided*10
+        newScore = (playerScore player1) + enemiesCollided*47
+    in (initInGameInfos (initPlayer po newLifes newHealth newScore) newEnemies)

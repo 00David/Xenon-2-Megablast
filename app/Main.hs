@@ -11,6 +11,7 @@ import Keyboard
 import Objects
 import Hitbox
 import GameSetup
+import Assets
 import RandomGenerations
 import PictureUtils
 
@@ -18,19 +19,22 @@ import PictureUtils
 
 data GameControl = GameControl { 
     keyboard :: Keyboard,
-    state :: GameState -- StartMenu or InGame
+    state :: GameState, -- StartMenu or InGame
+    assets :: GameAssets
 } deriving Show
 
 initGame :: IO GameControl
 initGame = do 
+    assts <- initGameAssets
     return GameControl {
         keyboard = initKeyboard,
-        state = (initStartMenu Start)
+        state = (initStartMenu Start),
+        assets = assts
     }
 
 -- Rendering
-renderIO :: Picture -> [Picture] -> GameControl -> IO Picture
-renderIO bgnd boosters (GameControl _ gs) = 
+renderIO :: Picture -> GameControl -> IO Picture
+renderIO bgnd (GameControl _ gs assts) = 
     case gs of
         -- Start menu
         StartMenu option ->
@@ -50,14 +54,32 @@ renderIO bgnd boosters (GameControl _ gs) =
             let p1o = playerObject p1
             in case centerHitbox (objectHitbox p1o) of
                 Just (p1x, p1y) -> do
-                    let picturesBoosters = boostersEnabled boosters p1 -- get the sprites of the enabled spaceship boosters
+                    let picturesBoosters = boostersEnabled (pBoosterPics assts) p1 -- get the sprites of the enabled spaceship boosters
                         picturesEnemies = translateEnemyPictures enemies -- get the sprites of the enemies
-                    return (Pictures ([bgnd]++picturesBoosters++[Translate p1x p1y (objectPicture p1o)]++picturesEnemies))
+                        picturesDigits = digitPics assts
+                        pictureHealthP1 = (getHealthAsset True (playerHealth p1) assts)
+                        pictureHealthP2 = (getHealthAsset False 100 assts)
+                    return (Pictures ([bgnd]++picturesBoosters++[Translate p1x p1y (objectPicture p1o)]++picturesEnemies
+                        -- bottom bar pictures
+                        ++[(Translate (leftXScreenBound+37.5) (bottomYScreenBound+16.5) (bottomLeftPic assts)),
+                        (Translate (leftXScreenBound+14) (bottomYScreenBound+17) (letterPBlackPic picturesDigits)),
+                        (Translate (leftXScreenBound+36) (bottomYScreenBound+17) (digit1BlackPic picturesDigits))]
+                        ++(getTranslatedScoreAssets True (playerScore p1) assts)++
+                        [(Translate 0 (bottomYScreenBound+16.5) (bottomBarPic assts)),
+                        (Translate (-169) (bottomYScreenBound+16.5) pictureHealthP1),
+                        (Translate 169 (bottomYScreenBound+16.5) pictureHealthP2),
+                        (Translate (-68) (bottomYScreenBound+16.5) (getDigitAsset (playerLifes p1) assts)),
+                        (Translate 68 (bottomYScreenBound+16.5) (getDigitAsset 0 assts))]
+                        ++(getTranslatedScoreAssets False 0 assts)++
+                        [(Translate (rightXScreenBound-37.5) (bottomYScreenBound+16.5) (bottomRightPic assts)),
+                        (Translate (rightXScreenBound-36) (bottomYScreenBound+17) (letterPBlackPic picturesDigits)),
+                        (Translate (rightXScreenBound-14) (bottomYScreenBound+17) (digit2BlackPic picturesDigits))]
+                        ))
                 Nothing -> error "player must have a center"
   
 -- Event handling
 handleEventsIO :: Event -> GameControl -> IO GameControl
-handleEventsIO ev (GameControl kbd gs) = do
+handleEventsIO ev (GameControl kbd gs assts) = do
     -- trace ("event received: " <> show ev) 
     let newKBD = (handleKeyEvent ev kbd) -- keyboard update
     case gs of
@@ -67,11 +89,10 @@ handleEventsIO ev (GameControl kbd gs) = do
             if option == Start && (isKeyDown (SpecialKey KeySpace) newKBD)
                 then do
                     (vx, vy) <- generateVirusCoordinates
-                    spaceshipP1 <- loadPNG "./assets/spaceship/spaceship_norm.png"
-                    virusPic <- loadBMP "./assets/virus.bmp"
                     return GameControl {
                         keyboard = initKeyboard,
-                        state = startInitInGame spaceshipP1 virusPic vx vy 0 0
+                        state = startInitInGame (p1Pic assts) (virusPic assts) vx vy 0 0,
+                        assets = assts
                     }
                 else 
                     if isKeyDown (SpecialKey KeyEsc) newKBD
@@ -80,26 +101,23 @@ handleEventsIO ev (GameControl kbd gs) = do
                             error "EXIT"
                         else
                             case (isKeyDown (SpecialKey KeyUp) newKBD, isKeyDown (SpecialKey KeyDown) newKBD, option) of
-                            (True, True, _) -> return (GameControl newKBD gs)
-                            (_, True, Start) -> return (GameControl newKBD (initStartMenu Option2))
-                            (True, _, Option2) -> return (GameControl newKBD (initStartMenu Start))
-                            _ -> return (GameControl newKBD gs)
+                            (True, True, _) -> return (GameControl newKBD gs assts)
+                            (_, True, Start) -> return (GameControl newKBD (initStartMenu Option2) assts)
+                            (True, _, Option2) -> return (GameControl newKBD (initStartMenu Start) assts)
+                            _ -> return (GameControl newKBD gs assts)
         -- In game
         InGame _ -> 
             -- if the "Escape" key is pressed while in game, we're back to the start menu
             if (isKeyDown (SpecialKey KeyEsc) newKBD)
-                then return GameControl {
-                    keyboard = initKeyboard,
-                    state = initStartMenu Start
-                }
-            else return (GameControl newKBD gs)
+                then return (GameControl initKeyboard (initStartMenu Start) assts)
+                else return (GameControl newKBD gs assts)
 
 -- Updating
 updateIO :: Float -> GameControl -> IO GameControl
-updateIO deltaTime (GameControl kbd gs) = do
+updateIO deltaTime (GameControl kbd gs assts) = do
     case gs of
         -- Start menu
-        StartMenu _ -> return (GameControl kbd gs)
+        StartMenu _ -> return (GameControl kbd gs assts)
         -- In game
         InGame ig1@(InGameInfos p1 _) ->
             let 
@@ -114,36 +132,27 @@ updateIO deltaTime (GameControl kbd gs) = do
 
                 -- collided enemies deleted from the GameState
                 ig3 = handleCollisionP1WithEnemies ig2
-
             in
             -- in case of collision with the virus, moves it elsewhere
             if length (gameEnemies ig3) == 0 then trace "VIRUS DETRUIT !" $ do
                 (newVX, newVY) <- generateVirusCoordinates
-                virusPic <- loadBMP "./assets/virus.bmp"
-                let newVo = initStaticEnnemyRectangleObject virusPic newVX newVY
+                let newVo = initStaticEnnemyRectangleObject (virusPic assts) newVX newVY
                     newV = initEnnemy newVo 1
                     newEnemies = [newV]
-                return (GameControl kbd (initInGame(initInGameInfos (gamePlayer1 ig3) newEnemies)))
+                return (GameControl kbd (initInGame(initInGameInfos (gamePlayer1 ig3) newEnemies)) assts)
             else
-                return (GameControl kbd (InGame ig3))
+                return (GameControl kbd (InGame ig3) assts)
 
 -- Game loop
 main :: IO ()
 main = do
     bgnd <- loadPNG "./assets/Starfield.png"
-    -- spaceship boosters are loaded into an array
-    boosters <- sequence 
-        [ loadPNG "./assets/spaceship/booster_left.png"
-        , loadPNG "./assets/spaceship/booster_right.png"
-        , loadPNG "./assets/spaceship/booster_top_left.png"
-        , loadPNG "./assets/spaceship/booster_top_right.png"
-        ]
     initCtrl <- initGame
     playIO 
         (InWindow "Xenon 2 : Megablast" (widthScreen, heightScreen) (10, 10)) 
         black 
         framesPerSecond
         initCtrl
-        (renderIO bgnd boosters)
+        (renderIO bgnd)
         handleEventsIO
         updateIO

@@ -1,6 +1,5 @@
 module GameSetup (module GameSetup) where
 import Graphics.Gloss
-import Graphics.Gloss.Juicy
 
 -- ============================================================
 -- ========================= ASSETS ===========================
@@ -34,13 +33,6 @@ widthPlayer :: Float
 widthPlayer = 110
 heightPlayer :: Float
 heightPlayer = 76
-
-loadPNG :: String -> IO Picture
-loadPNG path = do
-    maybePNG <- loadJuicyPNG path
-    case maybePNG of
-        Nothing  -> error ("Impossible to load "++path)
-        Just png -> return png
 
 -- ============================================================
 -- ========================= SPEEDS ===========================
