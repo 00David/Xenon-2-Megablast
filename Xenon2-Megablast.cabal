@@ -26,12 +26,12 @@ source-repository head
 library
   exposed-modules:
       Assets
+      Background
       GameSetup
       Hitbox
       Keyboard
       Model
       Objects
-      PictureUtils
       RandomGenerations
       Utils
   other-modules:

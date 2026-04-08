@@ -18,6 +18,8 @@ topYScreenBound :: Float
 topYScreenBound = ((fromIntegral heightScreen) / 2)
 bottomYScreenBound :: Float
 bottomYScreenBound = -((fromIntegral heightScreen) / 2)
+bottomYScreenWithBarBound :: Float
+bottomYScreenWithBarBound = bottomYScreenBound+33 -- bottomYScreenBound counting bottom score bar
 
 widthVirus :: Float
 widthVirus = 65
@@ -43,6 +45,9 @@ screenDefaultSpeed = 3
 
 playerDefaultSpeed :: Float
 playerDefaultSpeed = 300 -- pixels / second
+
+backgroundDefaultScrollingSpeed :: Float
+backgroundDefaultScrollingSpeed = 100 -- pixels / second
 
 framesPerSecond :: Int
 framesPerSecond = 60

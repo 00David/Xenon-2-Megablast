@@ -13,28 +13,31 @@ import Hitbox
 import GameSetup
 import Assets
 import RandomGenerations
-import PictureUtils
+import Background
 
 -- GameControl initialisation
 
 data GameControl = GameControl { 
     keyboard :: Keyboard,
     state :: GameState, -- StartMenu or InGame
-    assets :: GameAssets
+    assets :: GameAssets,
+    background :: Background
 } deriving Show
 
 initGame :: IO GameControl
 initGame = do 
     assts <- initGameAssets
+    bgnd <- initStartBackground
     return GameControl {
         keyboard = initKeyboard,
         state = (initStartMenu Start),
-        assets = assts
+        assets = assts,
+        background = bgnd
     }
 
 -- Rendering
-renderIO :: Picture -> GameControl -> IO Picture
-renderIO bgnd (GameControl _ gs assts) = 
+renderIO :: GameControl -> IO Picture
+renderIO (GameControl _ gs assts bgnd) = 
     case gs of
         -- Start menu
         StartMenu option ->
@@ -48,38 +51,24 @@ renderIO bgnd (GameControl _ gs assts) =
                     Option2 -> (-110, 90, -100) 
                 select1 = Translate xSelect1 ySelect (Scale 0.3 0.3 (Color white (Text ">")))
                 select2 = Translate xSelect2 ySelect (Scale 0.3 0.3 (Color white (Text "<")))
-            in return (Pictures [bgnd, subtitle, title, textOption1, textOption2, select1, select2])
+            in return (Pictures ((getTranslatedBackgrounds bgnd)++[subtitle, title, textOption1, textOption2, select1, select2]))
         -- In game
-        InGame (InGameInfos p1 enemies) ->
+        InGame (InGameInfos p1 p2 enemies) ->
             let p1o = playerObject p1
             in case centerHitbox (objectHitbox p1o) of
                 Just (p1x, p1y) -> do
-                    let picturesBoosters = boostersEnabled (pBoosterPics assts) p1 -- get the sprites of the enabled spaceship boosters
-                        picturesEnemies = translateEnemyPictures enemies -- get the sprites of the enemies
-                        picturesDigits = digitPics assts
-                        pictureHealthP1 = (getHealthAsset True (playerHealth p1) assts)
-                        pictureHealthP2 = (getHealthAsset False 100 assts)
-                    return (Pictures ([bgnd]++picturesBoosters++[Translate p1x p1y (objectPicture p1o)]++picturesEnemies
+                    let picturesP1Boosters = getTranslatedBoosterAssets p1 assts -- get the sprites of the enabled spaceship boosters
+                        picturesEnemies = getTranslatedEnemiesAssets enemies -- get the sprites of the enemies
+                        picturesBackground = getTranslatedBackgrounds bgnd
+                    return (Pictures (picturesBackground++picturesP1Boosters++[Translate p1x p1y (objectPicture p1o)]++picturesEnemies
                         -- bottom bar pictures
-                        ++[(Translate (leftXScreenBound+37.5) (bottomYScreenBound+16.5) (bottomLeftPic assts)),
-                        (Translate (leftXScreenBound+14) (bottomYScreenBound+17) (letterPBlackPic picturesDigits)),
-                        (Translate (leftXScreenBound+36) (bottomYScreenBound+17) (digit1BlackPic picturesDigits))]
-                        ++(getTranslatedScoreAssets True (playerScore p1) assts)++
-                        [(Translate 0 (bottomYScreenBound+16.5) (bottomBarPic assts)),
-                        (Translate (-169) (bottomYScreenBound+16.5) pictureHealthP1),
-                        (Translate 169 (bottomYScreenBound+16.5) pictureHealthP2),
-                        (Translate (-68) (bottomYScreenBound+16.5) (getDigitAsset (playerLifes p1) assts)),
-                        (Translate 68 (bottomYScreenBound+16.5) (getDigitAsset 0 assts))]
-                        ++(getTranslatedScoreAssets False 0 assts)++
-                        [(Translate (rightXScreenBound-37.5) (bottomYScreenBound+16.5) (bottomRightPic assts)),
-                        (Translate (rightXScreenBound-36) (bottomYScreenBound+17) (letterPBlackPic picturesDigits)),
-                        (Translate (rightXScreenBound-14) (bottomYScreenBound+17) (digit2BlackPic picturesDigits))]
+                        ++ (getTranslatedBottomBar p1 p2 assts)
                         ))
                 Nothing -> error "player must have a center"
   
 -- Event handling
 handleEventsIO :: Event -> GameControl -> IO GameControl
-handleEventsIO ev (GameControl kbd gs assts) = do
+handleEventsIO ev (GameControl kbd gs assts bgnd) = do
     -- trace ("event received: " <> show ev) 
     let newKBD = (handleKeyEvent ev kbd) -- keyboard update
     case gs of
@@ -91,8 +80,9 @@ handleEventsIO ev (GameControl kbd gs assts) = do
                     (vx, vy) <- generateVirusCoordinates
                     return GameControl {
                         keyboard = initKeyboard,
-                        state = startInitInGame (p1Pic assts) (virusPic assts) vx vy 0 0,
-                        assets = assts
+                        state = startInitInGame (p1Pic assts) (virusPic assts) vx vy 0 0 0 0,
+                        assets = assts,
+                        background = bgnd
                     }
                 else 
                     if isKeyDown (SpecialKey KeyEsc) newKBD
@@ -101,28 +91,30 @@ handleEventsIO ev (GameControl kbd gs assts) = do
                             error "EXIT"
                         else
                             case (isKeyDown (SpecialKey KeyUp) newKBD, isKeyDown (SpecialKey KeyDown) newKBD, option) of
-                            (True, True, _) -> return (GameControl newKBD gs assts)
-                            (_, True, Start) -> return (GameControl newKBD (initStartMenu Option2) assts)
-                            (True, _, Option2) -> return (GameControl newKBD (initStartMenu Start) assts)
-                            _ -> return (GameControl newKBD gs assts)
+                            (True, True, _) -> return (GameControl newKBD gs assts bgnd)
+                            (_, True, Start) -> return (GameControl newKBD (initStartMenu Option2) assts bgnd)
+                            (True, _, Option2) -> return (GameControl newKBD (initStartMenu Start) assts bgnd)
+                            _ -> return (GameControl newKBD gs assts bgnd)
         -- In game
         InGame _ -> 
             -- if the "Escape" key is pressed while in game, we're back to the start menu
             if (isKeyDown (SpecialKey KeyEsc) newKBD)
-                then return (GameControl initKeyboard (initStartMenu Start) assts)
-                else return (GameControl newKBD gs assts)
+                then return (GameControl initKeyboard (initStartMenu Start) assts bgnd)
+                else return (GameControl newKBD gs assts bgnd)
 
 -- Updating
 updateIO :: Float -> GameControl -> IO GameControl
-updateIO deltaTime (GameControl kbd gs assts) = do
+updateIO deltaTime (GameControl kbd gs assts bgnd) = do
     case gs of
         -- Start menu
-        StartMenu _ -> return (GameControl kbd gs assts)
+        StartMenu _ -> return (GameControl kbd gs assts bgnd)
         -- In game
-        InGame ig1@(InGameInfos p1 _) ->
+        InGame ig1@(InGameInfos p1 p2 _) ->
             let 
-                -- player1 updated direction and speed
+                -- Background postion updated
+                newBgnd = updateBackground deltaTime bgnd
 
+                -- player1 updated direction and speed
                 (newDirP1, newObjectSpeedP1) = player1NewDirectionSpeed kbd deltaTime
                 p1V2 = setPlayerDirectionSpeed p1 (newDirP1, newObjectSpeedP1)
 
@@ -136,23 +128,22 @@ updateIO deltaTime (GameControl kbd gs assts) = do
             -- in case of collision with the virus, moves it elsewhere
             if length (gameEnemies ig3) == 0 then trace "VIRUS DETRUIT !" $ do
                 (newVX, newVY) <- generateVirusCoordinates
-                let newVo = initStaticEnnemyRectangleObject (virusPic assts) newVX newVY
-                    newV = initEnnemy newVo 1
+                let newVo = initStaticEnemyRectangleObject (virusPic assts) newVX newVY
+                    newV = initEnemy newVo 1
                     newEnemies = [newV]
-                return (GameControl kbd (initInGame(initInGameInfos (gamePlayer1 ig3) newEnemies)) assts)
+                return (GameControl kbd (initInGame(initInGameInfos (gamePlayer1 ig3) p2 newEnemies)) assts newBgnd)
             else
-                return (GameControl kbd (InGame ig3) assts)
+                return (GameControl kbd (InGame ig3) assts newBgnd)
 
 -- Game loop
 main :: IO ()
 main = do
-    bgnd <- loadPNG "./assets/Starfield.png"
     initCtrl <- initGame
     playIO 
-        (InWindow "Xenon 2 : Megablast" (widthScreen, heightScreen) (10, 10)) 
+        (InWindow "Xenon 2 : Megablast" (widthScreen, heightScreen) (0, 0)) 
         black 
         framesPerSecond
         initCtrl
-        (renderIO bgnd)
+        renderIO
         handleEventsIO
         updateIO
