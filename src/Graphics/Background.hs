@@ -1,8 +1,8 @@
-module Background (module Background) where
+module Graphics.Background (module Graphics.Background) where
 
 import Graphics.Gloss
 
-import Assets
+import Graphics.Assets
 import GameSetup
 import Data.Fixed
 

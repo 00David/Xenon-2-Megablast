@@ -1,18 +1,18 @@
-module Assets (module Assets) where
-
-import Data.Char
-import Data.Sequence
-import qualified Data.Sequence as Seq
+module Graphics.Assets (module Graphics.Assets) where
 
 import Graphics.Gloss ( Picture(Translate) )
 import Graphics.Gloss.Juicy
 
-import GameSetup
-import Model
-import Objects
-import Hitbox
-import Utils
+import Data.Char
+import Data.Sequence
+import qualified Data.Sequence as Seq
 import qualified Data.List as List
+
+import GameSetup
+import GameState
+import Utils
+import Objects.Objects
+import Objects.Hitbox
 
 -- Loads a PNG Picture, from a given path
 loadPNG :: String -> IO Picture

@@ -1,4 +1,4 @@
-module Hitbox (module Hitbox) where
+module Objects.Hitbox (module Objects.Hitbox) where
 
 import Utils
 

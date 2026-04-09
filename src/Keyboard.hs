@@ -7,7 +7,7 @@ import qualified Data.Set as S
 import Debug.Trace
 
 import GameSetup
-import Objects
+import Objects.Objects
 
 type Keyboard = Set Key
 

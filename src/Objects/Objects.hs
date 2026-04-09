@@ -1,8 +1,8 @@
-module Objects (module Objects) where
+module Objects.Objects (module Objects.Objects) where
 
 import Graphics.Gloss (Picture)
 
-import Hitbox
+import Objects.Hitbox
 
 -- ============================================================
 -- ====================== OBJECTS =============================

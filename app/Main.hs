@@ -6,29 +6,29 @@ import Graphics.Gloss.Interface.IO.Game
 
 import Debug.Trace
 
-import Model
-import Keyboard
-import Objects
-import Hitbox
 import GameSetup
-import Assets
+import GameState
+import Keyboard
+import Objects.Objects
+import Objects.Hitbox
+import Graphics.Assets
+import Graphics.Background
 import RandomGenerations
-import Background
 
--- GameControl initialisation
+-- Game initialisation
 
-data GameControl = GameControl { 
+data Game = Game { 
     keyboard :: Keyboard,
     state :: GameState, -- StartMenu or InGame
     assets :: GameAssets,
     background :: Background
 } deriving Show
 
-initGame :: IO GameControl
+initGame :: IO Game
 initGame = do 
     assts <- initGameAssets
     bgnd <- initStartBackground
-    return GameControl {
+    return Game {
         keyboard = initKeyboard,
         state = (initStartMenu Start),
         assets = assts,
@@ -36,8 +36,8 @@ initGame = do
     }
 
 -- Rendering
-renderIO :: GameControl -> IO Picture
-renderIO (GameControl _ gs assts bgnd) = 
+renderIO :: Game -> IO Picture
+renderIO (Game _ gs assts bgnd) = 
     case gs of
         -- Start menu
         StartMenu option ->
@@ -67,8 +67,8 @@ renderIO (GameControl _ gs assts bgnd) =
                 Nothing -> error "player must have a center"
   
 -- Event handling
-handleEventsIO :: Event -> GameControl -> IO GameControl
-handleEventsIO ev (GameControl kbd gs assts bgnd) = do
+handleEventsIO :: Event -> Game -> IO Game
+handleEventsIO ev (Game kbd gs assts bgnd) = do
     -- trace ("event received: " <> show ev) 
     let newKBD = (handleKeyEvent ev kbd) -- keyboard update
     case gs of
@@ -78,7 +78,7 @@ handleEventsIO ev (GameControl kbd gs assts bgnd) = do
             if option == Start && (isKeyDown (SpecialKey KeySpace) newKBD)
                 then do
                     (vx, vy) <- generateVirusCoordinates
-                    return GameControl {
+                    return Game {
                         keyboard = initKeyboard,
                         state = startInitInGame (p1Pic assts) (virusPic assts) vx vy 0 0 0 0,
                         assets = assts,
@@ -91,23 +91,23 @@ handleEventsIO ev (GameControl kbd gs assts bgnd) = do
                             error "EXIT"
                         else
                             case (isKeyDown (SpecialKey KeyUp) newKBD, isKeyDown (SpecialKey KeyDown) newKBD, option) of
-                            (True, True, _) -> return (GameControl newKBD gs assts bgnd)
-                            (_, True, Start) -> return (GameControl newKBD (initStartMenu Option2) assts bgnd)
-                            (True, _, Option2) -> return (GameControl newKBD (initStartMenu Start) assts bgnd)
-                            _ -> return (GameControl newKBD gs assts bgnd)
+                            (True, True, _) -> return (Game newKBD gs assts bgnd)
+                            (_, True, Start) -> return (Game newKBD (initStartMenu Option2) assts bgnd)
+                            (True, _, Option2) -> return (Game newKBD (initStartMenu Start) assts bgnd)
+                            _ -> return (Game newKBD gs assts bgnd)
         -- In game
         InGame _ -> 
             -- if the "Escape" key is pressed while in game, we're back to the start menu
             if (isKeyDown (SpecialKey KeyEsc) newKBD)
-                then return (GameControl initKeyboard (initStartMenu Start) assts bgnd)
-                else return (GameControl newKBD gs assts bgnd)
+                then return (Game initKeyboard (initStartMenu Start) assts bgnd)
+                else return (Game newKBD gs assts bgnd)
 
 -- Updating
-updateIO :: Float -> GameControl -> IO GameControl
-updateIO deltaTime (GameControl kbd gs assts bgnd) = do
+updateIO :: Float -> Game -> IO Game
+updateIO deltaTime (Game kbd gs assts bgnd) = do
     case gs of
         -- Start menu
-        StartMenu _ -> return (GameControl kbd gs assts bgnd)
+        StartMenu _ -> return (Game kbd gs assts bgnd)
         -- In game
         InGame ig1@(InGameInfos p1 p2 _) ->
             let 
@@ -123,7 +123,7 @@ updateIO deltaTime (GameControl kbd gs assts bgnd) = do
                 ig2 = ig1{ gamePlayer1=newPlayer1 }
 
                 -- collided enemies deleted from the GameState
-                ig3 = handleCollisionP1WithEnemies ig2
+                ig3 = handleCollisionPlayerWithEnemies ig2
             in
             -- in case of collision with the virus, moves it elsewhere
             if length (gameEnemies ig3) == 0 then trace "VIRUS DETRUIT !" $ do
@@ -131,9 +131,9 @@ updateIO deltaTime (GameControl kbd gs assts bgnd) = do
                 let newVo = initStaticEnemyRectangleObject (virusPic assts) newVX newVY
                     newV = initEnemy newVo 1
                     newEnemies = [newV]
-                return (GameControl kbd (initInGame(initInGameInfos (gamePlayer1 ig3) p2 newEnemies)) assts newBgnd)
+                return (Game kbd (initInGame(initInGameInfos (gamePlayer1 ig3) p2 newEnemies)) assts newBgnd)
             else
-                return (GameControl kbd (InGame ig3) assts newBgnd)
+                return (Game kbd (InGame ig3) assts newBgnd)
 
 -- Game loop
 main :: IO ()

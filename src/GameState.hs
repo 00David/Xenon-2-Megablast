@@ -1,10 +1,11 @@
-module Model (module Model) where
-
+module GameState (module GameState) where
 import Graphics.Gloss
 
-import Hitbox
+import Control.Monad.State
+
 import GameSetup
-import Objects
+import Objects.Objects
+import Objects.Hitbox
 
 import Debug.Trace
 
@@ -38,57 +39,6 @@ initPlayer po lifes health score
     | lifes < 0 || lifes > 3 = error "number of lifes outside of [0, 3], must be inside it"
     | health < 0 || health > 100 = error "current life health outside of [0, 100], must be inside it"
     | otherwise = Player po lifes health score
-
--- Updates the player informations
-updatePlayer :: Player -> Player
-updatePlayer p =
-    --trace (show (objectDirection p1o)) $
-    movePlayer p
-
--- tests TODO
--- Sets player new given direction and speed
-setPlayerDirectionSpeed :: Player -> (Direction, ObjectSpeed) -> Player
-setPlayerDirectionSpeed p (newDir, newOS) =
-    let po = playerObject p
-        picP = objectPicture po
-    in case centerHitbox (objectHitbox po) of
-        Just (px, py) -> 
-            let newPo = initPlayerObject picP px py newDir newOS
-            in initPlayer newPo (playerLifes p) (playerHealth p) (playerScore p)
-        Nothing -> error "player must have a center"
-
--- tests TODO
--- Moves the player, according to its current object direction and speed
-movePlayer :: Player -> Player
-movePlayer p@(Player po _ _ _) =
-    let d@(Direction dirX dirY) = objectDirection po
-        pic = objectPicture po
-        os@(ObjectSpeed s) = objectSpeed po
-        dxp = (fromIntegral dirX)*s -- player movement, for x, got from direction and speed
-        dyp = (fromIntegral dirY)*s -- player movement, for y, got from direction and speed
-    in case centerHitbox (objectHitbox po) of
-        Just (px, py) -> 
-            let newPX = px + dxp
-                newPY = py + dyp
-                leftBound = leftXScreenBound + (widthPlayer / 2)
-                rightBound = rightXScreenBound - (widthPlayer / 2)
-                topBound = topYScreenBound - (heightPlayer / 2)
-                bottomBound = bottomYScreenWithBarBound + (heightPlayer / 2)
-
-                -- tests X independantly, X direction can become 0 if it brings out of screen bounds
-                newDirX = if newPX >= leftBound && newPX <= rightBound then dirX else 0
-                -- tests Y independantly, Y direction can become 0 if it brings out of screen bounds
-                newDirY = if newPY >= bottomBound && newPY <= topBound then dirY else 0
-
-            in if (newDirX /= 0 || newDirY /= 0) 
-                then
-                    let newD = (initDirection newDirX newDirY)
-                        newPo1 = (initMovableObject (objectPicture po) (objectHitbox po) newD (objectSpeed po)) -- player object with new direction
-                        newPo2 = moveObject newPo1 screenDefaultSpeed -- player object with its hitbox having a new position
-                    in initPlayer newPo2 (playerLifes p) (playerHealth p) (playerScore p)
-                else p
-
-        Nothing -> error "player must have a center"
 
 -- ============================================================
 -- ========================= ENNEMY ===========================
@@ -137,6 +87,8 @@ data InGameInfos = InGameInfos {
         gameEnemies :: [Enemy]
     } deriving (Show)
 
+type InGameAction a = StateT InGameInfos IO a
+
 prop_inv_ingameinfos :: InGameInfos -> Bool
 prop_inv_ingameinfos (InGameInfos p1 p2 enemies) = prop_inv_player p1 && prop_inv_player p2
     && foldr (\e acc -> prop_inv_enemy e && acc) True enemies
@@ -176,6 +128,68 @@ startInitInGame picPlayer picVirus xVirus yVirus xP1 yP1 xP2 yP2
             listEnemies = [newV]
         in initInGame (initInGameInfos newP1 newP2 listEnemies)
 
+
+-- Updates the player informations
+updatePlayer :: Player -> Player
+updatePlayer p =
+    --trace (show (objectDirection p1o)) $
+    movePlayer p
+
+-- tests TODO
+-- Sets player new given direction and speed
+setPlayerDirectionSpeed :: Bool -> (Direction, ObjectSpeed) -> InGameInfos -> InGameInfos
+setPlayerDirectionSpeed isP1 (newDir, newOS) (InGameInfos p1 p2 enemies) =
+    let p = if isP1 then p1 else p2
+        po = playerObject p
+        picP = objectPicture po
+    in case centerHitbox (objectHitbox po) of
+        Just (px, py) -> 
+            let newPo = initPlayerObject picP px py newDir newOS
+                newP = initPlayer newPo (playerLifes p) (playerHealth p) (playerScore p)
+                in 
+                    if isP1 then (initInGameInfos newP p2 enemies)
+                    else (initInGameInfos p1 newP enemies)
+        Nothing -> error "player must have a center"
+
+-- tests TODO
+-- Moves the player, according to its current object direction and speed
+movePlayer :: Bool -> InGameInfos -> InGameInfos
+movePlayer isP1 igi@(InGameInfos p1 p2 enemies) =
+    let p = if isP1 then p1 else p2
+        po = playerObject p
+        d@(Direction dirX dirY) = objectDirection po
+        pic = objectPicture po
+        os@(ObjectSpeed s) = objectSpeed po
+        dxp = (fromIntegral dirX)*s -- player movement, for x, got from direction and speed
+        dyp = (fromIntegral dirY)*s -- player movement, for y, got from direction and speed
+    in case centerHitbox (objectHitbox po) of
+        Just (px, py) -> 
+            let newPX = px + dxp
+                newPY = py + dyp
+                leftBound = leftXScreenBound + (widthPlayer / 2)
+                rightBound = rightXScreenBound - (widthPlayer / 2)
+                topBound = topYScreenBound - (heightPlayer / 2)
+                bottomBound = bottomYScreenWithBarBound + (heightPlayer / 2)
+
+                -- tests X independantly, X direction can become 0 if it brings out of screen bounds
+                newDirX = if newPX >= leftBound && newPX <= rightBound then dirX else 0
+                -- tests Y independantly, Y direction can become 0 if it brings out of screen bounds
+                newDirY = if newPY >= bottomBound && newPY <= topBound then dirY else 0
+
+            in if (newDirX /= 0 || newDirY /= 0) 
+                then
+                    let newD = (initDirection newDirX newDirY)
+                        newPo1 = (initMovableObject (objectPicture po) (objectHitbox po) newD (objectSpeed po)) -- player object with new direction
+                        newPo2 = moveObject newPo1 screenDefaultSpeed -- player object with its hitbox having a new position
+                        newP = initPlayer newPo2 (playerLifes p) (playerHealth p) (playerScore p)
+                    in 
+                        if isP1 then (initInGameInfos newP p2 enemies)
+                        else (initInGameInfos p1 newP enemies)
+                else igi
+
+        Nothing -> error "player must have a center"
+
+
 -- tests TODO
 -- Detects if there is a collision between a player and an ennemy
 collisionPlayerWithEnemy :: Player -> Enemy -> Bool
@@ -197,22 +211,16 @@ keepAliveEnemies player (enemy:xs)
 
 -- tests TODO
 -- Decreases enemies health if they collide with the player, once an enemy has no health (=0), he is deleted from the game infos
-handleCollisionP1WithEnemies :: InGameInfos -> InGameInfos
-handleCollisionP1WithEnemies (InGameInfos player1 player2 listEnemies) = 
-    let newEnemies = keepAliveEnemies player1 listEnemies
+handleCollisionPlayerWithEnemies :: Bool -> InGameInfos -> InGameInfos
+handleCollisionPlayerWithEnemies  isP1 (InGameInfos p1 p2 listEnemies) = 
+    let player = if isP1 then p1 else p2
+        newEnemies = keepAliveEnemies player listEnemies
         enemiesCollided = (length listEnemies) - (length newEnemies)
-        po = (playerObject player1)
-        newLifes = (playerLifes player1)
-        newHealth = (playerHealth player1) - enemiesCollided*10
-        newScore = (playerScore player1) + enemiesCollided*47
-    in (initInGameInfos (initPlayer po newLifes newHealth newScore) player2 newEnemies)
-
-handleCollisionP2WithEnemies :: InGameInfos -> InGameInfos
-handleCollisionP2WithEnemies (InGameInfos player1 player2 listEnemies) = 
-    let newEnemies = keepAliveEnemies player2 listEnemies
-        enemiesCollided = (length listEnemies) - (length newEnemies)
-        po = (playerObject player2)
-        newLifes = (playerLifes player2)
-        newHealth = (playerHealth player2) - enemiesCollided*10
-        newScore = (playerScore player2) + enemiesCollided*47
-    in (initInGameInfos player1 (initPlayer po newLifes newHealth newScore) newEnemies)
+        po = (playerObject player)
+        newLifes = (playerLifes player)
+        newHealth = (playerHealth player) - enemiesCollided*10
+        newScore = (playerScore player) + enemiesCollided*47
+    in 
+        if isP1 then (initInGameInfos (initPlayer po newLifes newHealth newScore) p2 newEnemies)
+        else (initInGameInfos p1 (initPlayer po newLifes newHealth newScore) newEnemies)
+        
