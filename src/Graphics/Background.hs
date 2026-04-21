@@ -13,31 +13,33 @@ data Background = Background{
     backgroundPicture :: Picture, 
     backgroundScrollingSpeed :: Float,
     backgroundY :: Float
-} deriving Show
+} deriving (Eq, Show)
 
 -- Ensures that background pictures always cover entirely screen height, by having y part of [0, heightBackgroundPicture[
 prop_inv_background :: Background -> Bool
 prop_inv_background (Background _ _ y) = y >= 0 && y < heightBackgroundPicture
 
--- tests TODO
 initStartBackground :: IO Background
 initStartBackground = do
     bgnd <- loadPNG "./assets/Starfield.png"
     return (Background bgnd backgroundDefaultScrollingSpeed 0)
 
--- tests TODO
 initBackground :: Picture -> Float -> Float -> Background
 initBackground pic scrollingSpeed bgndY = 
-    (Background pic scrollingSpeed (mod' bgndY heightBackgroundPicture))
+    (Background pic scrollingSpeed bgndY)
 
--- tests TODO
--- Updates background position o background pictures
+-- Updates background position of background pictures
 -- First argument : renderIO delta time
 updateBackground :: Float -> Background -> Background
 updateBackground dt (Background pic speed y) =
     let dy = speed * dt
         newY = y - dy
-    in (initBackground pic speed newY)
+    in (initBackground pic speed (mod' newY heightBackgroundPicture))
+
+prop_post_updateBackground :: Float -> Background -> Bool
+prop_post_updateBackground dt bgnd@(Background pic speed _) =
+    let (Background picRes speedRes yRes) = updateBackground dt bgnd
+    in pic == picRes && speed == speedRes && yRes >= 0 && yRes < heightBackgroundPicture
 
 -- Gets background translated assets on the screen (3 same background pictures).
 getTranslatedBackgrounds :: Background -> [Picture]

@@ -1,10 +1,7 @@
 module Keyboard (module Keyboard) where
 import Graphics.Gloss.Interface.IO.Interact
 
-import Data.Set (Set)
-import qualified Data.Set as S
-
-import Debug.Trace
+import Data.Set
 
 import GameSetup
 import Objects.Objects
@@ -12,17 +9,15 @@ import Objects.Objects
 type Keyboard = Set Key
 
 initKeyboard :: Keyboard
-initKeyboard = S.empty
+initKeyboard = empty
 
 handleKeyEvent :: Event -> Keyboard -> Keyboard
-handleKeyEvent (EventKey key Down _ _) kbd = 
-    S.insert key kbd
-handleKeyEvent (EventKey key Up _ _) kbd = 
-    S.delete key kbd
+handleKeyEvent (EventKey key Down _ _) kbd = insert key kbd
+handleKeyEvent (EventKey key Up _ _) kbd = delete key kbd
 handleKeyEvent _ kbd = kbd   
 
 isKeyDown :: Key -> Keyboard -> Bool
-isKeyDown = S.member
+isKeyDown = member
 
 -- Gives a new direction and object
 -- Float argument : delta time between each frame, got by updateIO

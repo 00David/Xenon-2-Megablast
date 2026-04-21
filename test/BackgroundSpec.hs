@@ -1,0 +1,65 @@
+{-# LANGUAGE InstanceSigs #-}
+module BackgroundSpec (
+    spec
+)
+where
+
+import Graphics.Gloss (Picture (Blank))
+
+import Test.Hspec
+import Test.QuickCheck
+
+import Graphics.Background
+
+spec :: Spec
+spec = do
+    initBackgroundSpec
+    updateBackgroundSpec
+    updateBackgroundQuickCheckSpec
+
+newtype TestBackground = TestBackground { getBackground :: Background } deriving (Eq, Show)
+instance Arbitrary TestBackground where
+    arbitrary = do    
+        scrollingSpeed <- arbitrary
+        y <- choose (0, heightBackgroundPicture-1)
+        return $ TestBackground (Background Blank  scrollingSpeed y)
+
+prop_initBackground_preservesInvariant :: Float -> Float -> Property
+prop_initBackground_preservesInvariant scrollingSpeed y =
+    y >= 0 && y < heightBackgroundPicture ==> prop_inv_background (initBackground Blank scrollingSpeed y) 
+
+initBackgroundSpec :: SpecWith ()
+initBackgroundSpec = do
+    describe "initBackground" $ do
+        it "preserves the Background invariant for valid Backgrounds" $
+            property prop_initBackground_preservesInvariant
+
+updateBackgroundSpec :: SpecWith ()
+updateBackgroundSpec = do
+    describe "updateBackground (unit tests)" $ do
+
+        it "does not change background when dt = 0" $ do
+            let bg = Background Blank 5 10
+            updateBackground 0 bg `shouldBe` bg
+
+        it "moves background upward when speed > 0" $ do
+            let bg = Background Blank 10 50
+                (Background _ _ y') = updateBackground 1 bg
+            y' `shouldBe` (50 - 10)
+
+        it "moves background less when dt is smaller" $ do
+            let bg = Background Blank 10 50
+                (Background _ _ y1) = updateBackground 1 bg
+                (Background _ _ y2) = updateBackground 0.5 bg
+            (50 - y1) `shouldBe` 10
+            (50 - y2) `shouldBe` 5
+
+updateBackgroundQuickCheckSpec :: Spec
+updateBackgroundQuickCheckSpec = do
+    describe "updateBackground (generated samples)" $ do
+        it "satisfies updateBackground post-condition for all generated parameters" $
+            property (\dt (TestBackground bgnd) -> 
+                prop_inv_background bgnd
+                ==> let bgndPost = updateBackground dt bgnd
+                in prop_inv_background bgndPost && prop_post_updateBackground dt bgnd
+                )

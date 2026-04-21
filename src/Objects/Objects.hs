@@ -85,10 +85,12 @@ prop_post_moveObject (StaticO p h) screenS =
         (StaticO p2 _) -> p == p2 && (prop_post_moveHitbox h (0, -screenS))
         _ -> False
 
--- Tests TODO
 -- Detects if there is a collision between 2 objects (thanks to their hitboxes)
 collisionObject :: Object -> Object -> Bool
 collisionObject o1 o2 = collisionHitbox (objectHitbox o1) (objectHitbox o2)
+
+prop_commutativity_collisionObject :: Object -> Object -> Bool
+prop_commutativity_collisionObject o1 o2 = (collisionObject o1 o2 == collisionObject o2 o1)
 
 -- ============================================================
 -- ====================== WALLS ===============================
@@ -109,8 +111,8 @@ prop_wall_allCollideWithNextObject [] = True
 prop_wall_allCollideWithNextObject (_:[]) = True
 prop_wall_allCollideWithNextObject (x:y:xs) = (collisionHitbox (objectHitbox x) (objectHitbox y)) && prop_wall_allCollideWithNextObject (y:xs)
 
-prop_inv_wall :: [Object] -> Bool
-prop_inv_wall l = length l > 0 && prop_wall_allStaticObject l && prop_wall_allCollideWithNextObject l
+prop_inv_wall :: Wall -> Bool
+prop_inv_wall (Wall l) = length l > 0 && prop_wall_allStaticObject l && prop_wall_allCollideWithNextObject l
 
 initWall :: [Object] -> Wall
 initWall l

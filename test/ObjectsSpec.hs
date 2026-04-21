@@ -1,4 +1,5 @@
 module ObjectsSpec (
+    TestObject(..),
     spec
 )
 where
@@ -8,9 +9,9 @@ import Graphics.Gloss (Picture (Blank))
 import Test.Hspec
 import Test.QuickCheck
 
-import Hitbox
-import HitboxSpec(TestHitbox(getHitbox))
-import Objects
+import Objects.Hitbox
+import Objects.Objects
+import HitboxSpec(TestHitbox(..))
 
 spec :: Spec
 spec = do
@@ -22,8 +23,9 @@ spec = do
   objectGetDirectionSpec
   objectGetSpeedSpec
   moveObjectSpec
-  preMoveObjectSpec
-  postMoveObjectSpec
+  moveObjectQuickCheckSpec
+  collisionObjectSpec
+  commutativityCollisionObjectSpec
   wallInitSpec
 
 -- ============================================================
@@ -56,7 +58,7 @@ instance Arbitrary TestObjectSpeed where
 
 prop_initObjectSpeed_preservesInvariant :: Float -> Property
 prop_initObjectSpeed_preservesInvariant s =
-  s >= 0 ==> prop_inv_objectSpeed (initObjectSpeed s)
+    s >= 0 ==> prop_inv_objectSpeed (initObjectSpeed s)
 
 initObjectSpeedSpec :: SpecWith ()
 initObjectSpeedSpec = do
@@ -154,7 +156,7 @@ objectGetSpeedSpec = do
 
 moveObjectSpec :: Spec
 moveObjectSpec = do
-    describe "moveObject" $ do
+    describe "moveObject (unit tests)" $ do
         it "moves MovableO according to direction and speed" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction 1 (-1)
@@ -181,25 +183,79 @@ moveObjectSpec = do
                 screenS = 0
             moveObject obj screenS `shouldBe` (StaticO Blank (Rectangle 0 10 5 5))
 
-test_prop_pre_moveObject :: TestObject -> Float -> Property
-test_prop_pre_moveObject (TestObject obj) screenS =
-    screenS >= 0 ==> prop_pre_moveObject obj screenS
-
-preMoveObjectSpec :: Spec
-preMoveObjectSpec = do
-    describe "prop_pre_moveObject" $ do
-        it "satisfies moveObject pre-condition for all valid Objects" $
-            property test_prop_pre_moveObject
-
-test_prop_post_moveObject :: TestObject -> Float -> Property
-test_prop_post_moveObject (TestObject obj) screenS =
-    prop_post_moveObject obj screenS === True
-
-postMoveObjectSpec :: Spec
-postMoveObjectSpec = do
-    describe "prop_post_moveObject" $ do
+moveObjectQuickCheckSpec :: Spec
+moveObjectQuickCheckSpec = do
+    describe "moveObject (generated samples)" $ do
         it "satisfies moveObject post-condition for all valid Objects" $
-            property test_prop_post_moveObject
+            property (\(TestObject o) screenS ->
+                prop_inv_object o && prop_pre_moveObject o screenS
+                ==> let postO = moveObject o screenS in
+                    prop_inv_object postO && prop_post_moveObject o screenS
+                )
+
+collisionObjectSpec :: Spec
+collisionObjectSpec = do
+    describe "collisionObject" $ do
+        -- Rectangle vs Rectangle
+        it "detects collision between overlapping rectangles" $ do
+            let o1 = StaticO Blank (Rectangle 0 0 10 10)
+                o2 = StaticO Blank (Rectangle 5 5 10 10)
+            collisionObject o1 o2 `shouldBe` True
+
+        it "detects no collision when rectangles are apart" $ do
+            let o1 = StaticO Blank (Rectangle 0 0 10 10)
+                o2 = StaticO Blank (Rectangle 20 20 5 5)
+            collisionObject o1 o2 `shouldBe` False
+
+        -- Circle vs Circle
+        it "detects collision between overlapping circles" $ do
+            let o1 = StaticO Blank (Circle 0 0 5)
+                o2 = StaticO Blank (Circle 3 4 5)
+            collisionObject o1 o2 `shouldBe` True
+
+        it "detects no collision between distant circles" $ do
+            let o1 = StaticO Blank (Circle 0 0 5)
+                o2 = StaticO Blank (Circle 20 0 5)
+            collisionObject o1 o2 `shouldBe` False
+
+        -- Circle vs Rectangle
+        it "detects collision between circle and rectangle" $ do
+            let o1 = StaticO Blank (Circle 5 5 5)
+                o2 = StaticO Blank (Rectangle 8 8 10 10)
+            collisionObject o1 o2 `shouldBe` True
+
+        it "detects no collision between circle and rectangle" $ do
+            let o1 = StaticO Blank (Circle 0 0 2)
+                o2 = StaticO Blank (Rectangle 10 10 5 5)
+            collisionObject o1 o2 `shouldBe` False
+
+        -- Movable vs Static
+        it "detects collision between MovableO and StaticO" $ do
+            let o1 = MovableO Blank (Rectangle 0 0 10 10) (Direction 1 0) (ObjectSpeed 1)
+                o2 = StaticO Blank (Rectangle 5 5 10 10)
+            collisionObject o1 o2 `shouldBe` True
+
+        -- Hitboxes (list)
+        it "detects collision if one hitbox inside list collides" $ do
+            let hlist = Hitboxes 0 0 [Rectangle 0 0 10 10, Circle 20 20 5]
+                o1 = StaticO Blank hlist
+                o2 = StaticO Blank (Circle 5 5 2)
+            collisionObject o1 o2 `shouldBe` True
+
+        it "detects no collision if none collide" $ do
+            let hlist = Hitboxes 0 0 [Rectangle 0 0 10 10, Circle 20 20 5]
+                o1 = StaticO Blank hlist
+                o2 = StaticO Blank (Circle 100 100 2)
+            collisionObject o1 o2 `shouldBe` False
+
+commutativityCollisionObjectSpec :: Spec
+commutativityCollisionObjectSpec = do
+    describe "prop_commutativity_collisionObject" $ do
+        it "is symmetric (collisionObject o1 o2 == collisionObject o2 o1)" $
+            property (\(TestObject o1) (TestObject o2) ->
+                (prop_inv_object o1 && prop_inv_object o2)
+                ==> prop_commutativity_collisionObject o1 o2
+                )
 
 -- ============================================================
 -- ====================== WALLS ===============================
@@ -234,7 +290,7 @@ instance Arbitrary TestWall where
                 mkRects (k-1) (xNext,yNext) (StaticO Blank rect : acc)
 
 prop_wall_preservesInvariant :: TestWall -> Bool
-prop_wall_preservesInvariant (TestWall (Wall objs)) = prop_inv_wall objs
+prop_wall_preservesInvariant (TestWall w) = prop_inv_wall w
 
 wallInitSpec :: Spec
 wallInitSpec = do

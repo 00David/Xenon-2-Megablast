@@ -1,69 +1,36 @@
-module GameState (module GameState) where
+module GameState.GameState (module GameState.GameState) where
+
 import Graphics.Gloss
 
-import Control.Monad.State
+import qualified Control.Monad.State as St
 
+import Keyboard
 import GameSetup
+import GameState.Player
+import GameState.Enemy
+import Graphics.Assets
+import Graphics.Background
 import Objects.Objects
 import Objects.Hitbox
 
 import Debug.Trace
 
 -- ============================================================
--- ========================= PLAYER ===========================
+-- =================== GAME INITIALISATION ====================
 -- ============================================================
 
-data Player = Player {
-    playerObject :: Object, -- graphical representation of the player
-    playerLifes :: Int, -- player remaining lifes, inside of [0, 3]
-    playerHealth :: Int, -- health for the current player life, inside of [0, 100]
-    playerScore :: Int -- player current score, positive
-} deriving (Show)
+data Game = Game { 
+    keyboard :: Keyboard,
+    state :: GameState, -- StartMenu or InGame
+    assets :: GameAssets,
+    background :: Background
+} deriving Show
 
-prop_inv_player :: Player -> Bool
-prop_inv_player (Player po lifes health score) = prop_inv_object po && lifes >= 0 && lifes <= 3
-    && health >= 0 && health <= 100 && score >= 0
-
-initPlayerObject :: Picture -> Float -> Float -> Direction -> ObjectSpeed -> Object
-initPlayerObject pic x y dir speed = 
-    (initMovableObject 
-        pic 
-        (initHitboxRectangle (x-(widthPlayer / 2)) (y-(heightPlayer / 2)) widthPlayer heightPlayer)
-        dir
-        speed
-    )
-
--- tests TODO
-initPlayer :: Object -> Int -> Int -> Int -> Player
-initPlayer po lifes health score
-    | lifes < 0 || lifes > 3 = error "number of lifes outside of [0, 3], must be inside it"
-    | health < 0 || health > 100 = error "current life health outside of [0, 100], must be inside it"
-    | otherwise = Player po lifes health score
-
--- ============================================================
--- ========================= ENNEMY ===========================
--- ============================================================
-
-data Enemy = Enemy {
-    enemyObject :: Object, -- graphical representation of the enemy
-    enemyHealth :: Int -- enemy remaining health, > 0
-} deriving (Show)
-
-prop_inv_enemy :: Enemy -> Bool
-prop_inv_enemy (Enemy eo health) = prop_inv_object eo && health > 0
-
-initStaticEnemyRectangleObject :: Picture -> Float -> Float -> Object
-initStaticEnemyRectangleObject pic x y = 
-    (initStaticObject 
-        pic
-        (initHitboxRectangle (x-(widthVirus / 2)) (y-(heightVirus / 2)) widthVirus heightVirus)
-    )
-
--- tests TODO
-initEnemy :: Object -> Int -> Enemy
-initEnemy eo health
-    | health <= 0 = error "ennemy health must be strictly positive"
-    | otherwise = Enemy eo health
+initStartGame :: IO Game
+initStartGame = do 
+    assts <- initGameAssets
+    bgnd <- initStartBackground
+    return $ Game initKeyboard (initStartMenu Start) assts bgnd
 
 -- ============================================================
 -- ====================== GAMESTATE ===========================
@@ -87,7 +54,7 @@ data InGameInfos = InGameInfos {
         gameEnemies :: [Enemy]
     } deriving (Show)
 
-type InGameAction a = StateT InGameInfos IO a
+type InGameState a = St.State InGameInfos a
 
 prop_inv_ingameinfos :: InGameInfos -> Bool
 prop_inv_ingameinfos (InGameInfos p1 p2 enemies) = prop_inv_player p1 && prop_inv_player p2
@@ -128,67 +95,73 @@ startInitInGame picPlayer picVirus xVirus yVirus xP1 yP1 xP2 yP2
             listEnemies = [newV]
         in initInGame (initInGameInfos newP1 newP2 listEnemies)
 
+updateInGame :: Keyboard -> Float -> InGameState ()
+updateInGame kbd deltaTime = do
+    -- update player1 direction and speed
+    updatePlayerDirectionSpeedSt True (player1NewDirectionSpeed kbd deltaTime)
 
--- Updates the player informations
-updatePlayer :: Player -> Player
-updatePlayer p =
-    --trace (show (objectDirection p1o)) $
-    movePlayer p
+    -- move player1
+    movePlayerSt True
+
+    -- handle collisions between player1 and enemies
+    handleCollisionPlayerWithEnemiesSt True
+    
+
+updatePlayerDirectionSpeedSt :: Bool -> (Direction, ObjectSpeed) -> InGameState ()
+updatePlayerDirectionSpeedSt isP1 ds = St.state (updatePlayerDirectionSpeed isP1 ds)
 
 -- tests TODO
 -- Sets player new given direction and speed
-setPlayerDirectionSpeed :: Bool -> (Direction, ObjectSpeed) -> InGameInfos -> InGameInfos
-setPlayerDirectionSpeed isP1 (newDir, newOS) (InGameInfos p1 p2 enemies) =
+updatePlayerDirectionSpeed :: Bool -> (Direction, ObjectSpeed) -> InGameInfos -> ((), InGameInfos)
+updatePlayerDirectionSpeed isP1 (newDir, newOS) (InGameInfos p1 p2 enemies) =
     let p = if isP1 then p1 else p2
         po = playerObject p
         picP = objectPicture po
-    in case centerHitbox (objectHitbox po) of
-        Just (px, py) -> 
-            let newPo = initPlayerObject picP px py newDir newOS
-                newP = initPlayer newPo (playerLifes p) (playerHealth p) (playerScore p)
-                in 
-                    if isP1 then (initInGameInfos newP p2 enemies)
-                    else (initInGameInfos p1 newP enemies)
-        Nothing -> error "player must have a center"
+        (px, py) = centerHitbox (objectHitbox po)
+        
+        newPo = initPlayerObject picP px py newDir newOS
+        newP = initPlayer newPo (playerLifes p) (playerHealth p) (playerScore p)
+    in 
+        if isP1 then ((), initInGameInfos newP p2 enemies)
+        else ((), initInGameInfos p1 newP enemies)
+
+movePlayerSt :: Bool -> InGameState ()
+movePlayerSt isP1 = St.state (movePlayer isP1)
 
 -- tests TODO
 -- Moves the player, according to its current object direction and speed
-movePlayer :: Bool -> InGameInfos -> InGameInfos
+movePlayer :: Bool -> InGameInfos -> ((), InGameInfos)
 movePlayer isP1 igi@(InGameInfos p1 p2 enemies) =
     let p = if isP1 then p1 else p2
         po = playerObject p
-        d@(Direction dirX dirY) = objectDirection po
-        pic = objectPicture po
-        os@(ObjectSpeed s) = objectSpeed po
+        (Direction dirX dirY) = objectDirection po
+        (ObjectSpeed s) = objectSpeed po
         dxp = (fromIntegral dirX)*s -- player movement, for x, got from direction and speed
         dyp = (fromIntegral dirY)*s -- player movement, for y, got from direction and speed
-    in case centerHitbox (objectHitbox po) of
-        Just (px, py) -> 
-            let newPX = px + dxp
-                newPY = py + dyp
-                leftBound = leftXScreenBound + (widthPlayer / 2)
-                rightBound = rightXScreenBound - (widthPlayer / 2)
-                topBound = topYScreenBound - (heightPlayer / 2)
-                bottomBound = bottomYScreenWithBarBound + (heightPlayer / 2)
+        (px, py) = centerHitbox (objectHitbox po)
 
-                -- tests X independantly, X direction can become 0 if it brings out of screen bounds
-                newDirX = if newPX >= leftBound && newPX <= rightBound then dirX else 0
-                -- tests Y independantly, Y direction can become 0 if it brings out of screen bounds
-                newDirY = if newPY >= bottomBound && newPY <= topBound then dirY else 0
+        newPX = px + dxp
+        newPY = py + dyp
+        leftBound = leftXScreenBound + (widthPlayer / 2)
+        rightBound = rightXScreenBound - (widthPlayer / 2)
+        topBound = topYScreenBound - (heightPlayer / 2)
+        bottomBound = bottomYScreenWithBarBound + (heightPlayer / 2)
 
-            in if (newDirX /= 0 || newDirY /= 0) 
-                then
-                    let newD = (initDirection newDirX newDirY)
-                        newPo1 = (initMovableObject (objectPicture po) (objectHitbox po) newD (objectSpeed po)) -- player object with new direction
-                        newPo2 = moveObject newPo1 screenDefaultSpeed -- player object with its hitbox having a new position
-                        newP = initPlayer newPo2 (playerLifes p) (playerHealth p) (playerScore p)
-                    in 
-                        if isP1 then (initInGameInfos newP p2 enemies)
-                        else (initInGameInfos p1 newP enemies)
-                else igi
+        -- tests X independantly, X direction can become 0 if it brings out of screen bounds
+        newDirX = if newPX >= leftBound && newPX <= rightBound then dirX else 0
+        -- tests Y independantly, Y direction can become 0 if it brings out of screen bounds
+        newDirY = if newPY >= bottomBound && newPY <= topBound then dirY else 0
 
-        Nothing -> error "player must have a center"
-
+    in if (newDirX /= 0 || newDirY /= 0) 
+        then
+            let newD = (initDirection newDirX newDirY)
+                newPo1 = (initMovableObject (objectPicture po) (objectHitbox po) newD (objectSpeed po)) -- player object with new direction
+                newPo2 = moveObject newPo1 screenDefaultSpeed -- player object with its hitbox having a new position
+                newP = initPlayer newPo2 (playerLifes p) (playerHealth p) (playerScore p)
+            in 
+                if isP1 then ((), initInGameInfos newP p2 enemies)
+                else ((), initInGameInfos p1 newP enemies)
+        else ((), igi)
 
 -- tests TODO
 -- Detects if there is a collision between a player and an ennemy
@@ -209,9 +182,12 @@ keepAliveEnemies player (enemy:xs)
         in newEnemy:(keepAliveEnemies player xs) -- if the collided ennemy has more than 1 health, he is kept whith a decreased health
     | otherwise = enemy:(keepAliveEnemies player xs)
 
+handleCollisionPlayerWithEnemiesSt :: Bool -> InGameState ()
+handleCollisionPlayerWithEnemiesSt isP1 = St.state (handleCollisionPlayerWithEnemies isP1)
+
 -- tests TODO
 -- Decreases enemies health if they collide with the player, once an enemy has no health (=0), he is deleted from the game infos
-handleCollisionPlayerWithEnemies :: Bool -> InGameInfos -> InGameInfos
+handleCollisionPlayerWithEnemies :: Bool -> InGameInfos -> ((), InGameInfos)
 handleCollisionPlayerWithEnemies  isP1 (InGameInfos p1 p2 listEnemies) = 
     let player = if isP1 then p1 else p2
         newEnemies = keepAliveEnemies player listEnemies
@@ -221,6 +197,6 @@ handleCollisionPlayerWithEnemies  isP1 (InGameInfos p1 p2 listEnemies) =
         newHealth = (playerHealth player) - enemiesCollided*10
         newScore = (playerScore player) + enemiesCollided*47
     in 
-        if isP1 then (initInGameInfos (initPlayer po newLifes newHealth newScore) p2 newEnemies)
-        else (initInGameInfos p1 (initPlayer po newLifes newHealth newScore) newEnemies)
+        if isP1 then ((), initInGameInfos (initPlayer po newLifes newHealth newScore) p2 newEnemies)
+        else ((), initInGameInfos p1 (initPlayer po newLifes newHealth newScore) newEnemies)
         
