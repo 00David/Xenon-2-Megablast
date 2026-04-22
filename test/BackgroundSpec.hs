@@ -1,5 +1,6 @@
 {-# LANGUAGE InstanceSigs #-}
 module BackgroundSpec (
+    TestBackground(..),
     spec
 )
 where
@@ -30,7 +31,7 @@ prop_initBackground_preservesInvariant scrollingSpeed y =
 
 initBackgroundSpec :: SpecWith ()
 initBackgroundSpec = do
-    describe "initBackground" $ do
+    describe "initBackground (QuickCheck)" $ do
         it "preserves the Background invariant for valid Backgrounds" $
             property prop_initBackground_preservesInvariant
 
@@ -56,10 +57,10 @@ updateBackgroundSpec = do
 
 updateBackgroundQuickCheckSpec :: Spec
 updateBackgroundQuickCheckSpec = do
-    describe "updateBackground (generated samples)" $ do
+    describe "updateBackground (QuickCheck)" $ do
         it "satisfies updateBackground post-condition for all generated parameters" $
             property (\dt (TestBackground bgnd) -> 
-                prop_inv_background bgnd
+                prop_inv_background bgnd && prop_pre_updateBackground dt bgnd
                 ==> let bgndPost = updateBackground dt bgnd
                 in prop_inv_background bgndPost && prop_post_updateBackground dt bgnd
                 )

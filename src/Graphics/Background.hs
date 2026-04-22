@@ -29,12 +29,15 @@ initBackground pic scrollingSpeed bgndY =
     (Background pic scrollingSpeed bgndY)
 
 -- Updates background position of background pictures
--- First argument : renderIO delta time
+-- First argument : renderIO delta time, must be positive
 updateBackground :: Float -> Background -> Background
 updateBackground dt (Background pic speed y) =
     let dy = speed * dt
         newY = y - dy
     in (initBackground pic speed (mod' newY heightBackgroundPicture))
+
+prop_pre_updateBackground :: Float -> Background -> Bool
+prop_pre_updateBackground dt _ = dt >= 0
 
 prop_post_updateBackground :: Float -> Background -> Bool
 prop_post_updateBackground dt bgnd@(Background pic speed _) =

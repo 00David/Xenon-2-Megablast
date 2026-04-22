@@ -1,5 +1,6 @@
 {-# LANGUAGE InstanceSigs #-}
 module EnemySpec (
+    TestEnemy(..),
     spec
 )
 where
@@ -31,6 +32,6 @@ prop_initEnemy_preservesInvariant =
 
 initEnemySpec :: SpecWith ()
 initEnemySpec = do
-    describe "initEnemy" $ do
+    describe "initEnemy (QuickCheck)" $ do
         it "preserves the Enemy invariant for valid Enemies" $
             property prop_initEnemy_preservesInvariant

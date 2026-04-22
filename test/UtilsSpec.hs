@@ -13,7 +13,7 @@ spec = do
 
 clampSpec :: SpecWith ()
 clampSpec = do
-    describe "clamp" $ do
+    describe "clamp (unit tests)" $ do
         it "clamp on a value below the range, gives the range lower bound" $ do
             (clamp (-5) 0 3) `shouldBe` (0::Int)
 

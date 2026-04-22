@@ -27,7 +27,7 @@ library
   exposed-modules:
       GameSetup
       GameState.Enemy
-      GameState.GameState
+      GameState.Game
       GameState.Player
       Graphics.Assets
       Graphics.Background
@@ -82,7 +82,9 @@ test-suite Xenon2-Megablast-test
       AssetsSpec
       BackgroundSpec
       EnemySpec
+      GameSpec
       HitboxSpec
+      KeyboardSpec
       ObjectsSpec
       PlayerSpec
       UtilsSpec

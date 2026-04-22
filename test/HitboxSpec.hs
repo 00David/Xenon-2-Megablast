@@ -64,7 +64,7 @@ prop_initHitboxes_preservesInvariant x y l = length l > 0
 
 initHitboxSpec :: SpecWith ()
 initHitboxSpec = do
-    describe "initHitbox" $ do
+    describe "initHitbox (unit tests)" $ do
         it "preserves the Hitbox invariant for valid Circles" $
             property prop_initHitboxCircle_preservesInvariant
 
@@ -76,7 +76,7 @@ initHitboxSpec = do
 
 partOfHitboxSpec :: SpecWith ()
 partOfHitboxSpec = do
-    describe "partOfHitbox" $ do
+    describe "partOfHitbox (unit tests)" $ do
         it "(1, 1.8) is part of (Rectangle 0 0 2 2)" $ do
             let r = Rectangle 0 0 2 2
             partOfHitbox 1 1.8 r `shouldBe` True
@@ -103,7 +103,7 @@ partOfHitboxSpec = do
 
 centerHitboxSpec :: Spec
 centerHitboxSpec = do
-    describe "centerHitbox" $ do
+    describe "centerHitbox (unit tests)" $ do
 
         it "returns the center of a Circle" $ do
             let c = Circle 0 0 10
@@ -119,7 +119,7 @@ centerHitboxSpec = do
 
 collisionHitboxSpec :: Spec
 collisionHitboxSpec = do
-    describe "collisionHitbox" $ do
+    describe "collisionHitbox (unit tests)" $ do
         -- Rectangle vs Rectangle
         it "detects collision between overlapping rectangles" $ do
             let r1 = Rectangle 0 0 10 10
@@ -172,7 +172,7 @@ collisionHitboxSpec = do
 
 commutativityCollisionHitboxSpec :: Spec
 commutativityCollisionHitboxSpec = do
-    describe "prop_commutativity_collisionHitbox" $ do
+    describe "prop_commutativity_collisionHitbox (QuickCheck)" $ do
         it "is symmetric (collisionHitbox h1 h2 == collisionHitbox h2 h1)" $
             property (\(TestHitbox h1) (TestHitbox h2) ->
                 (prop_inv_hitbox h1 && prop_inv_hitbox h2)
@@ -199,7 +199,7 @@ moveHitboxSpec = do
 
 moveHitboxQuickCheckSpec :: Spec
 moveHitboxQuickCheckSpec = do
-    describe "moveHitbox (generated samples)" $ do
+    describe "moveHitbox (QuickCheck)" $ do
         it "satisfies moveHitbox post-condition for all valid Hitbox(es)" $
             property (\(TestHitbox h) (dx, dy) ->
                 prop_inv_hitbox h 

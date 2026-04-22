@@ -1,4 +1,5 @@
 module AssetsSpec (
+    TestGameAssets(..),
     spec
 )
 where
@@ -14,7 +15,7 @@ import Graphics.Assets
 import PlayerSpec(TestPlayer(..))
 import GameState.Player
 
--- Only the most 'interesting' Assets functions are tested here
+-- Only the most 'interesting' Assets functions are tested here (thus not IO functions)
 
 spec :: Spec
 spec = do
@@ -109,7 +110,7 @@ genValidScoreString = do
 
 completeScoreStringQuicCheckSpec :: Spec
 completeScoreStringQuicCheckSpec = do
-    describe "completeScoreString (generated samples)" $ do
+    describe "completeScoreString (QuickCheck)" $ do
         it "satisfies completeScoreString post-condition for all valid Strings" $
             property (forAll genValidScoreString (\s ->
                     prop_post_completeScoreString s
@@ -135,13 +136,13 @@ scoreToStringSpec = do
 
 scoreToStringQuickCheckSpec :: Spec
 scoreToStringQuickCheckSpec = do
-    describe "scoreToString (generated samples)" $ do
+    describe "scoreToString (QuickCheck)" $ do
         it "satisfies scoreToString post-condition for all Strings" $
             property (\s -> prop_post_scoreToString s)
 
 getTranslatedScoreAssetsQuickCheckSpec :: Spec
 getTranslatedScoreAssetsQuickCheckSpec = do
-    describe "getTranslatedScoreAssets (generated samples)" $ do
+    describe "getTranslatedScoreAssets (QuickCheck)" $ do
         it "satisfies getTranslatedScoreAssets post-condition for all parameters" $
             property (\b score (TestGameAssets ga) -> prop_post_getTranslatedScoreAssets b score ga)
 
@@ -151,7 +152,7 @@ getTranslatedScoreAssetsQuickCheckSpec = do
 
 getTranslatedHealthAssetsQuicCheckSpec :: Spec
 getTranslatedHealthAssetsQuicCheckSpec = do
-    describe "getTranslatedHealthAssets (generated samples)" $ do
+    describe "getTranslatedHealthAssets (QuickCheck)" $ do
         it "satisfies getTranslatedHealthAssets post-condition for all possible player healths" $
             property (\player1Health player2Health (TestGameAssets ga) -> 
                 prop_pre_getTranslatedHealthAssets player1Health player2Health ga
@@ -163,7 +164,7 @@ getTranslatedHealthAssetsQuicCheckSpec = do
 
 getTranslatedBoosterAssetsQuickCheckSpec :: Spec
 getTranslatedBoosterAssetsQuickCheckSpec = do
-    describe "getTranslatedBoosterAssets (generated samples)" $ do
+    describe "getTranslatedBoosterAssets (QuickCheck)" $ do
         it "satisfies getTranslatedBoosterAssets post-condition for all valid players" $
             property (\(TestPlayer player) (TestGameAssets ga) -> 
                 prop_inv_player player

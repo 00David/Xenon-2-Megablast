@@ -1,5 +1,7 @@
 module ObjectsSpec (
     TestObject(..),
+    TestDirection(..),
+    TestObjectSpeed(..),
     spec
 )
 where
@@ -47,7 +49,7 @@ prop_initDirection_preservesInvariant =
 
 initDirectionSpec :: SpecWith ()
 initDirectionSpec = do
-    describe "initDirection" $ do
+    describe "initDirection (QuickCheck)" $ do
         it "preserves the Direction invariant for valid Directions" $
             property prop_initDirection_preservesInvariant
 
@@ -62,7 +64,7 @@ prop_initObjectSpeed_preservesInvariant s =
 
 initObjectSpeedSpec :: SpecWith ()
 initObjectSpeedSpec = do
-    describe "initObjectSpeed" $ do
+    describe "initObjectSpeed (QuickCheck)" $ do
         it "preserves the ObjectSpeed invariant for valid ObjectSpeeds" $
             property prop_initObjectSpeed_preservesInvariant
 
@@ -87,7 +89,7 @@ prop_initStaticObject_preservesInvariant h =
 
 initObjectSpec :: SpecWith ()
 initObjectSpec = do
-    describe "initObject" $ do
+    describe "initObject (QuickCheck)" $ do
         it "preserves the Movable Object invariant for valid Movable Objects" $
             property prop_initMovableObject_preservesInvariant
 
@@ -96,7 +98,7 @@ initObjectSpec = do
 
 objectGetPictureSpec :: Spec
 objectGetPictureSpec = do
-    describe "objectPicture" $ do
+    describe "objectPicture (unit tests)" $ do
         it "objectPicture returns the correct picture for MovableO" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction 1 0
@@ -111,7 +113,7 @@ objectGetPictureSpec = do
 
 objectGetHitboxSpec :: Spec
 objectGetHitboxSpec = do
-    describe "objectHitbx" $ do
+    describe "objectHitbx (unit tests)" $ do
         it "objectHitbx returns the correct hitbox for MovableO" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction 1 0
@@ -126,7 +128,7 @@ objectGetHitboxSpec = do
 
 objectGetDirectionSpec :: Spec
 objectGetDirectionSpec = do
-    describe "objectDirection" $ do
+    describe "objectDirection (unit tests)" $ do
         it "objectDirection returns the correct direction for MovableO" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction (-1) 1
@@ -141,7 +143,7 @@ objectGetDirectionSpec = do
 
 objectGetSpeedSpec :: Spec
 objectGetSpeedSpec = do
-    describe "objectSpeed" $ do
+    describe "objectSpeed (unit tests)" $ do
         it "objectSpeed returns the correct speed for MovableO" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction 0 1
@@ -185,7 +187,7 @@ moveObjectSpec = do
 
 moveObjectQuickCheckSpec :: Spec
 moveObjectQuickCheckSpec = do
-    describe "moveObject (generated samples)" $ do
+    describe "moveObject (QuickCheck)" $ do
         it "satisfies moveObject post-condition for all valid Objects" $
             property (\(TestObject o) screenS ->
                 prop_inv_object o && prop_pre_moveObject o screenS
@@ -195,7 +197,7 @@ moveObjectQuickCheckSpec = do
 
 collisionObjectSpec :: Spec
 collisionObjectSpec = do
-    describe "collisionObject" $ do
+    describe "collisionObject (unit tests)" $ do
         -- Rectangle vs Rectangle
         it "detects collision between overlapping rectangles" $ do
             let o1 = StaticO Blank (Rectangle 0 0 10 10)
@@ -250,7 +252,7 @@ collisionObjectSpec = do
 
 commutativityCollisionObjectSpec :: Spec
 commutativityCollisionObjectSpec = do
-    describe "prop_commutativity_collisionObject" $ do
+    describe "prop_commutativity_collisionObject (QuickCheck)" $ do
         it "is symmetric (collisionObject o1 o2 == collisionObject o2 o1)" $
             property (\(TestObject o1) (TestObject o2) ->
                 (prop_inv_object o1 && prop_inv_object o2)
@@ -294,6 +296,6 @@ prop_wall_preservesInvariant (TestWall w) = prop_inv_wall w
 
 wallInitSpec :: Spec
 wallInitSpec = do
-    describe "initWall" $ do
+    describe "initWall (QuickCheck)" $ do
         it "preserves the Wall invariant for valid Walls" $
             property prop_wall_preservesInvariant

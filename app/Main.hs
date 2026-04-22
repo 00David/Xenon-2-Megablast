@@ -10,7 +10,7 @@ import Debug.Trace
 
 import GameSetup
 import GameState.Enemy
-import GameState.GameState
+import GameState.Game
 import GameState.Player
 import Graphics.Assets
 import Graphics.Background
