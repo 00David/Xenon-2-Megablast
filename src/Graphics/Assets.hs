@@ -13,6 +13,7 @@ import GameState.Enemy
 import GameSetup
 import Objects.Objects
 import Objects.Hitbox
+import Objects.Wall
 
 -- Loads a PNG Picture, from a given path
 loadPNG :: String -> IO Picture
@@ -39,7 +40,10 @@ data GameAssets = GameAssets {
     bottomRightPic :: Picture,
     digitPics :: DigitAssets,
     p1HealthBarPics :: HealtBarAssets,
-    p2HealthBarPics :: HealtBarAssets
+    p2HealthBarPics :: HealtBarAssets,
+    -- walls
+    leftWallPics :: [Picture],
+    rightWallPics :: [Picture]
 } deriving Show
 
 initGameAssets :: IO GameAssets
@@ -59,7 +63,9 @@ initGameAssets = do
     ds <- initDigitAssets
     p1Health <- initHealthP1Assets
     p2Health <- initHealthP2Assets
-    return $ GameAssets p1 p2 boosters v bottomLeft bottomBar bottomRight ds p1Health p2Health
+    leftWalls <- initWallAssets True
+    rightWalls <- initWallAssets False
+    return $ GameAssets p1 p2 boosters v bottomLeft bottomBar bottomRight ds p1Health p2Health leftWalls rightWalls
 
 -- ============================================================
 -- ======================= BOTTOM BAR =========================
@@ -286,3 +292,37 @@ getTranslatedEnemiesAssets (enemy:xs) =
                 centerY = y + (h / 2)
             in [Translate centerX centerY p]
         translateHitbox (Hitboxes _ _ l) p = foldr (\h acc -> (translateHitbox h p) <> acc) [] l
+
+-- ============================================================
+-- ==================== WALL ASSETS =====================
+-- ============================================================
+
+initWallAssets :: Bool -> IO [Picture]
+initWallAssets left = do
+    let wallSide = if left then "left_wall" else "right_wall"
+    imgs <- sequence [loadPNG ("./assets/walls/" ++ wallSide ++ show n ++ ".png") | n <- [0..3]]
+    return imgs
+
+-- Returns a list of translated wall assets.
+getTranslatedWallAssets :: FiniteWall -> [Picture]
+getTranslatedWallAssets (FiniteWall []) = []
+getTranslatedWallAssets (FiniteWall (wall:xs)) = 
+    let pic = objectPicture wall
+        h = objectHitbox wall
+    in (translateHitbox h pic) ++ getTranslatedWallAssets (FiniteWall xs) where
+        translateHitbox :: Hitbox -> Picture -> [Picture]
+        translateHitbox (Circle x y _) p = [Translate x y p]
+        translateHitbox (Rectangle x y w h) p = 
+            let centerX = x + (w / 2)
+                centerY = y + (h / 2)
+            in [Translate centerX centerY p]
+        translateHitbox (Hitboxes _ _ l) p = foldr (\h acc -> (translateHitbox h p) <> acc) [] l
+
+-- Returns a list of translated game wall assets. For infinite walls, it only translates a finite sub-part of them.
+getTranslatedGameWallAssets :: GameWalls -> [Picture]
+getTranslatedGameWallAssets (GameWalls leftWall leftWall2 rightWall rightWall2 walls) = 
+    getTranslatedWallAssets (infiniteToFiniteWall leftWall) ++ 
+    getTranslatedWallAssets (infiniteToFiniteWall leftWall2) ++ 
+    getTranslatedWallAssets (infiniteToFiniteWall rightWall) ++ 
+    getTranslatedWallAssets (infiniteToFiniteWall rightWall2) ++ 
+    foldr (\w acc -> (getTranslatedWallAssets w) <> acc) [] walls

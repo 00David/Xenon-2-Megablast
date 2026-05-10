@@ -1,6 +1,7 @@
 module GameSetup (module GameSetup) where
     
 import Graphics.Gloss
+import Data.Sequence
 
 -- ============================================================
 -- ========================= ASSETS ===========================
@@ -36,6 +37,14 @@ widthPlayer :: Float
 widthPlayer = 110
 heightPlayer :: Float
 heightPlayer = 76
+
+widthWalls :: Seq Float
+widthWalls = fromList [90, 90, 87, 84]
+heightWalls :: Seq Float
+heightWalls = fromList [42, 42, 44, 42]
+
+nbWallAssets :: Int
+nbWallAssets = 4
 
 -- ============================================================
 -- ========================= SPEEDS ===========================

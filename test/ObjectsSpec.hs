@@ -28,7 +28,6 @@ spec = do
   moveObjectQuickCheckSpec
   collisionObjectSpec
   commutativityCollisionObjectSpec
-  wallInitSpec
 
 -- ============================================================
 -- ====================== OBJECTS =============================
@@ -258,44 +257,3 @@ commutativityCollisionObjectSpec = do
                 (prop_inv_object o1 && prop_inv_object o2)
                 ==> prop_commutativity_collisionObject o1 o2
                 )
-
--- ============================================================
--- ====================== WALLS ===============================
--- ============================================================
-
-newtype TestWall = TestWall { getWall :: Wall } deriving (Eq, Show)
-instance Arbitrary TestWall where
-    arbitrary = do
-        n <- getPositive <$> arbitrary  -- number of objects (here only rectangles) part of the wall
-
-        -- first rectangle position randomly generated
-        x0 <- arbitrary
-        y0 <- arbitrary
-
-        objs <- mkRects n (x0,y0) []
-        return $ TestWall (initWall objs)
-
-        where
-            -- Generates a wall of overlapping rectangles
-            -- First parameter : the number of remaining rectangles to create
-            -- Second parameter : (x, y) of the bottom left angle of the current Rectangle to create
-            -- Third parameter : the list containing all objects of the wall so far created
-            mkRects :: Int -> (Float, Float) -> [Object] -> Gen [Object]
-            mkRects 0 _ acc = return (reverse acc)
-            mkRects k (x,y) acc = do
-                -- each rectangle of the wall has its width / height randomly generated (strictly positive) 
-                w <- getPositive <$> arbitrary
-                h <- getPositive <$> arbitrary
-                let rect = Rectangle x y w h
-                    xNext = x
-                    yNext = y + h / 2 -- vertical overlap
-                mkRects (k-1) (xNext,yNext) (StaticO Blank rect : acc)
-
-prop_wall_preservesInvariant :: TestWall -> Bool
-prop_wall_preservesInvariant (TestWall w) = prop_inv_wall w
-
-wallInitSpec :: Spec
-wallInitSpec = do
-    describe "initWall (QuickCheck)" $ do
-        it "preserves the Wall invariant for valid Walls" $
-            property prop_wall_preservesInvariant

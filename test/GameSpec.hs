@@ -60,7 +60,7 @@ prop_initGame_preservesInvariant kbd st assts bgnd =
 prop_initStartGame_preservesInvariant :: Property
 prop_initStartGame_preservesInvariant =
     ioProperty $ do
-        game <- initStartGame
+        game <- startInitGame
         return (prop_inv_game game)
 
 initGameSpec :: SpecWith ()
@@ -203,7 +203,7 @@ updatePlayerDirectionSpeedSpec = do
 
             igi = initInGameInfos p1 p2 []
             ds = (initDirection 1 0, initObjectSpeed 2)
-            (_, InGameInfos p1' _ _) = updatePlayerDirectionSpeed True ds igi
+            (_, InGameInfos p1' _ _ _) = updatePlayerDirectionSpeed True ds igi
 
         objectDirection (playerObject p1') `shouldBe` initDirection 1 0
         objectSpeed (playerObject p1')     `shouldBe` initObjectSpeed 2
@@ -217,7 +217,7 @@ updatePlayerDirectionSpeedSpec = do
 
             igi = initInGameInfos p1 p2 []
             ds = (initDirection 0 (-1), initObjectSpeed 3)
-            (_, InGameInfos _ p2' _) = updatePlayerDirectionSpeed False ds igi
+            (_, InGameInfos _ p2' _ _) = updatePlayerDirectionSpeed False ds igi
 
         objectDirection (playerObject p2') `shouldBe` initDirection 0 (-1)
         objectSpeed (playerObject p2')     `shouldBe` initObjectSpeed 3
@@ -245,7 +245,7 @@ movePlayerSpec = do
             p2  = initAlivePlayer po2 3 100 0
 
             igi = initInGameInfos p1 p2 []
-            (_, InGameInfos p1' _ _) = movePlayer True igi
+            (_, InGameInfos p1' _ _ _) = movePlayer True igi
             (x', _) = centerHitbox (objectHitbox (playerObject p1'))
 
         x' `shouldBe` x + 5
@@ -259,7 +259,7 @@ movePlayerSpec = do
             p2  = initAlivePlayer po2 3 100 0
 
             igi = initInGameInfos p1 p2 []
-            (_, InGameInfos _ p2' _) = movePlayer False igi
+            (_, InGameInfos _ p2' _ _) = movePlayer False igi
             (x', _) = centerHitbox (objectHitbox (playerObject p2'))
 
         x' `shouldBe` x - 2

@@ -4,6 +4,7 @@ import Graphics.Gloss
 import Graphics.Gloss.Interface.IO.Interact
 import Graphics.Gloss.Interface.IO.Game
 
+import System.Random
 import qualified Control.Monad.State as St
 
 import Debug.Trace
@@ -37,18 +38,23 @@ renderIO (Game _ (StartMenu option) _ bgnd) =
     in return (Pictures ((getTranslatedBackgrounds bgnd)++[subtitle, title, textOption1, textOption2, select1, select2]))
 
 -- In game
-renderIO (Game _ (InGame (InGameInfos p1 p2 enemies)) assts bgnd) =
+renderIO (Game _ (InGame (InGameInfos p1 p2 enemies walls)) assts bgnd) =
     let p1o = playerObject p1
         (p1x, p1y) = centerHitbox (objectHitbox p1o)
         
         picturesP1Boosters = getTranslatedBoosterAssets p1 assts -- get the sprites of the enabled spaceship boosters
         picturesEnemies = getTranslatedEnemiesAssets enemies -- get the sprites of the enemies
         picturesBackground = getTranslatedBackgrounds bgnd
+        picturesWalls = getTranslatedGameWallAssets walls
+        picturesBootmBar = getTranslatedBottomBar p1 p2 assts
         
     in
-        return (Pictures (picturesBackground++picturesP1Boosters++[Translate p1x p1y (objectPicture p1o)]++picturesEnemies
-            -- bottom bar pictures
-            ++ (getTranslatedBottomBar p1 p2 assts)
+        return (Pictures (
+            picturesBackground ++ picturesWalls ++
+            picturesP1Boosters ++
+            [Translate p1x p1y (objectPicture p1o)] ++
+            picturesEnemies ++
+            picturesBootmBar
             ))  
   
 -- Event handling
@@ -62,9 +68,10 @@ handleEventsIO ev game@(Game kbd (StartMenu option) assts _) = do
     if option == Start && (isKeyDown (SpecialKey KeySpace) newKBD)
         then do
             (vx, vy) <- generateVirusCoordinates
+            gen <- newStdGen
             return game{
                 keyboard = initKeyboard,
-                state = startInitInGame (p1Pic assts) (virusPic assts) vx vy 0 0 0 0
+                state = startInitInGame assts gen vx vy 0 0 0 0
                 }
         else 
             if isKeyDown (SpecialKey KeyEsc) newKBD
@@ -95,7 +102,7 @@ updateIO :: Float -> Game -> IO Game
 updateIO _ game@(Game _ (StartMenu _) _ _) = return game 
 
 -- In game
-updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos p1 p2 _)) assts bgnd) = do 
+updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos p1 p2 _ walls)) assts bgnd) = do 
     let -- Background update
         newBgnd = updateBackground deltaTime bgnd
 
@@ -108,14 +115,14 @@ updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos p1 p2 _)) assts bgnd)
         let newVo = initStaticEnemyRectangleObject (virusPic assts) newVX newVY
             newV = initEnemy newVo 1
             newEnemies = [newV]
-        return game{state = (initInGame(initInGameInfos (gamePlayer1 ig2) p2 newEnemies)), background = newBgnd}
+        return game{state = (initInGame(initInGameInfos (gamePlayer1 ig2) p2 newEnemies walls)), background = newBgnd}
     else
         return game{state = (InGame ig2), background = newBgnd}
 
 -- Game loop
 main :: IO ()
 main = do
-    initCtrl <- initStartGame
+    initCtrl <- startInitGame
     playIO 
         (InWindow "Xenon 2 : Megablast" (widthScreen, heightScreen) (0, 0)) 
         black 

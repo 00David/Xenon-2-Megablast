@@ -47,6 +47,9 @@ instance Arbitrary TestGameAssets where
         hb1 <- getHealthBarAssets <$> arbitrary
         hb2 <- getHealthBarAssets <$> arbitrary
 
+        leftWalls <- vectorOf 4 genPicture
+        rightWalls <- vectorOf 4 genPicture
+
         return $ TestGameAssets $ GameAssets { 
             p1Pic = p1
             , p2Pic = p2
@@ -58,6 +61,8 @@ instance Arbitrary TestGameAssets where
             , digitPics = digitAssets
             , p1HealthBarPics = hb1
             , p2HealthBarPics = hb2
+            , leftWallPics = leftWalls
+            , rightWallPics = rightWalls
         }
 
 newtype TestHealthBarAssets = TestHealthBarAssets { getHealthBarAssets :: HealtBarAssets } deriving (Show)

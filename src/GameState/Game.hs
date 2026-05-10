@@ -2,6 +2,7 @@ module GameState.Game (module GameState.Game) where
 
 import Graphics.Gloss
 
+import System.Random
 import qualified Control.Monad.State as St
 
 import Keyboard
@@ -12,8 +13,7 @@ import Graphics.Assets
 import Graphics.Background
 import Objects.Objects
 import Objects.Hitbox
-
-import Debug.Trace
+import Objects.Wall
 
 -- ============================================================
 -- =================== GAME INITIALISATION ====================
@@ -32,8 +32,8 @@ prop_inv_game (Game _ st _ bgnd) = prop_inv_gameState st && prop_inv_background 
 initGame :: Keyboard -> GameState -> GameAssets -> Background -> Game
 initGame kbd gs ga bgnd = Game kbd gs ga bgnd
 
-initStartGame :: IO Game
-initStartGame = do 
+startInitGame :: IO Game
+startInitGame = do 
     assts <- initGameAssets
     bgnd <- initStartBackground
     return $ initGame initKeyboard (initStartMenu Start) assts bgnd
@@ -58,8 +58,8 @@ initInGame :: InGameInfos -> GameState
 initInGame gameInfos = InGame gameInfos
 
 -- Initializes the game at start, with the given player coordinates
-startInitInGame :: Picture -> Picture -> Float -> Float -> Float -> Float -> Float -> Float -> GameState
-startInitInGame picPlayer picVirus xVirus yVirus xP1 yP1 xP2 yP2
+startInitInGame :: GameAssets -> StdGen -> Float -> Float -> Float -> Float -> Float -> Float -> GameState
+startInitInGame assts gen xVirus yVirus xP1 yP1 xP2 yP2
     | xP1 - (widthPlayer / 2) < leftXScreenBound
         || xP1 + (widthPlayer / 2) > rightXScreenBound  = error "player1 x out of screen"
     | yP1 - (heightPlayer / 2) < bottomYScreenWithBarBound
@@ -72,15 +72,16 @@ startInitInGame picPlayer picVirus xVirus yVirus xP1 yP1 xP2 yP2
         || xVirus + (widthVirus / 2) > rightXScreenBound  = error "virus x out of screen"
     | yVirus - (heightVirus / 2) < bottomYScreenWithBarBound
         || yVirus + (heightVirus / 2) > topYScreenBound = error "virus y out of screen"
-    | otherwise = 
-        let newP1o = initPlayerObject picPlayer xP1 yP1 (initDirection 0 0) (initObjectSpeed 0)
+    | otherwise =
+        let newP1o = initPlayerObject (p1Pic assts) xP1 yP1 (initDirection 0 0) (initObjectSpeed 0)
             newP1 = initAlivePlayer newP1o 3 100 0
-            newP2o = initPlayerObject picPlayer xP2 yP2 (initDirection 0 0) (initObjectSpeed 0)
+            newP2o = initPlayerObject (p2Pic assts) xP2 yP2 (initDirection 0 0) (initObjectSpeed 0)
             newP2 = initDeadPlayer newP2o 0 1
-            newVo = initStaticEnemyRectangleObject picVirus xVirus yVirus
+            newVo = initStaticEnemyRectangleObject (virusPic assts) xVirus yVirus
             newV = initEnemy newVo 1
             listEnemies = [newV]
-        in initInGame (initInGameInfos newP1 newP2 listEnemies)
+            walls = initGameWalls (leftWallPics assts) (rightWallPics assts) gen
+        in initInGame (initInGameInfos newP1 newP2 listEnemies walls)
 
 prop_pre_startInitInGame :: Picture -> Picture -> Float -> Float -> Float -> Float -> Float -> Float -> Bool
 prop_pre_startInitInGame _ _ xVirus yVirus xP1 yP1 xP2 yP2 =
@@ -117,19 +118,22 @@ data StartMenuOption = Start | Option2
 data InGameInfos = InGameInfos {
         gamePlayer1 :: Player,
         gamePlayer2 :: Player,
-        gameEnemies :: [Enemy]
+        gameEnemies :: [Enemy],
+        gameWalls :: GameWalls
     } deriving (Show)
 
 prop_inv_ingameinfos :: InGameInfos -> Bool
-prop_inv_ingameinfos (InGameInfos p1 p2 enemies) = prop_inv_player p1 && prop_inv_player p2
+prop_inv_ingameinfos (InGameInfos p1 p2 enemies walls) = prop_inv_player p1 && prop_inv_player p2
     && foldr (\e acc -> prop_inv_enemy e && acc) True enemies
+    && prop_inv_gameWalls walls
 
-initInGameInfos :: Player -> Player -> [Enemy] -> InGameInfos
-initInGameInfos player1 player2 enemies = InGameInfos player1 player2 enemies
+initInGameInfos :: Player -> Player -> [Enemy] -> GameWalls -> InGameInfos
+initInGameInfos player1 player2 enemies walls = 
+    InGameInfos player1 player2 enemies walls
 
 -- Sets player new given direction and speed
 updatePlayerDirectionSpeed :: Bool -> (Direction, ObjectSpeed) -> InGameInfos -> ((), InGameInfos)
-updatePlayerDirectionSpeed isP1 (newDir, newOS) (InGameInfos p1 p2 enemies) =
+updatePlayerDirectionSpeed isP1 (newDir, newOS) (InGameInfos p1 p2 enemies walls) =
     let p = if isP1 then p1 else p2
         po = playerObject p
         picP = objectPicture po
@@ -138,17 +142,17 @@ updatePlayerDirectionSpeed isP1 (newDir, newOS) (InGameInfos p1 p2 enemies) =
         newPo = initPlayerObject picP px py newDir newOS
         newP = initAlivePlayer newPo (playerLifes p) (playerHealth p) (playerScore p)
     in 
-        if isP1 then ((), initInGameInfos newP p2 enemies)
-        else ((), initInGameInfos p1 newP enemies)
+        if isP1 then ((), initInGameInfos newP p2 enemies walls)
+        else ((), initInGameInfos p1 newP enemies walls)
 
 prop_pre_updatePlayerDirectionSpeed :: Bool -> (Direction, ObjectSpeed) -> InGameInfos -> Bool
-prop_pre_updatePlayerDirectionSpeed isP1 _ (InGameInfos p1 p2 _) =
+prop_pre_updatePlayerDirectionSpeed isP1 _ (InGameInfos p1 p2 _ _) =
     let p = if isP1 then p1 else p2
     in not (isPlayerDead p)
 
 -- Moves the player, according to its current object direction and speed
 movePlayer :: Bool -> InGameInfos -> ((), InGameInfos)
-movePlayer isP1 igi@(InGameInfos p1 p2 enemies) =
+movePlayer isP1 igi@(InGameInfos p1 p2 enemies walls) =
     let p = if isP1 then p1 else p2
         po = playerObject p
         (Direction dirX dirY) = objectDirection po
@@ -164,10 +168,21 @@ movePlayer isP1 igi@(InGameInfos p1 p2 enemies) =
         topBound = topYScreenBound - (heightPlayer / 2)
         bottomBound = bottomYScreenWithBarBound + (heightPlayer / 2)
 
-        -- tests X independantly, X direction can become 0 if it brings out of screen bounds
-        newDirX = if newPX >= leftBound && newPX <= rightBound then dirX else 0
-        -- tests Y independantly, Y direction can become 0 if it brings out of screen bounds
-        newDirY = if newPY >= bottomBound && newPY <= topBound then dirY else 0
+        -- try indepedently to move its object in X and Y
+        objMoveX = initMovableObject (objectPicture po) (moveHitbox (objectHitbox po) (dxp, 0))
+                (Direction dirX dirY) (objectSpeed po)
+        objMoveY = initMovableObject (objectPicture po) (moveHitbox (objectHitbox po) (0, dyp))
+                (Direction dirX dirY) (objectSpeed po)
+
+        collideWallsX = collisionWithWalls objMoveX walls
+        collideWallsY = collisionWithWalls objMoveY walls
+
+        insideScreenX = newPX >= leftBound && newPX <= rightBound
+        insideScreenY = newPY >= bottomBound && newPY <= topBound
+
+        -- Directions can become 0 if it brings out of screen bounds or leads to a wall collision
+        newDirX = if insideScreenX && not collideWallsX then dirX else 0
+        newDirY = if insideScreenY && not collideWallsY then dirY else 0
 
     in if (newDirX /= 0 || newDirY /= 0) 
         then
@@ -176,12 +191,12 @@ movePlayer isP1 igi@(InGameInfos p1 p2 enemies) =
                 newPo2 = moveObject newPo1 screenDefaultSpeed -- player object with its hitbox having a new position
                 newP = initAlivePlayer newPo2 (playerLifes p) (playerHealth p) (playerScore p)
             in 
-                if isP1 then ((), initInGameInfos newP p2 enemies)
-                else ((), initInGameInfos p1 newP enemies)
+                if isP1 then ((), initInGameInfos newP p2 enemies walls)
+                else ((), initInGameInfos p1 newP enemies walls)
         else ((), igi)
 
 prop_pre_movePlayer :: Bool -> InGameInfos -> Bool
-prop_pre_movePlayer isP1 (InGameInfos p1 p2 _) =
+prop_pre_movePlayer isP1 (InGameInfos p1 p2 _ _) =
     let p = if isP1 then p1 else p2
     in not (isPlayerDead p)
 
@@ -215,7 +230,7 @@ prop_post_keepAliveEnemies player enemies nbColls =
 
 -- Decreases enemies health if they collide with the player, once an enemy has no health (=0), he is deleted from the game infos
 handleCollisionPlayerWithEnemies :: Bool -> InGameInfos -> ((), InGameInfos)
-handleCollisionPlayerWithEnemies  isP1 (InGameInfos p1 p2 listEnemies) = 
+handleCollisionPlayerWithEnemies  isP1 (InGameInfos p1 p2 listEnemies walls) = 
     let player = if isP1 then p1 else p2
         (newEnemies, collisions) = keepAliveEnemies player listEnemies 0
         po = (playerObject player)
@@ -230,13 +245,41 @@ handleCollisionPlayerWithEnemies  isP1 (InGameInfos p1 p2 listEnemies) =
         -- if the new life counter is strictly negative : the player becomes dead
         newP = if newLifes <= 0 then (initDeadPlayer po newScore 1) else (initAlivePlayer po newLifes newHealth2 newScore)
     in 
-        if isP1 then ((), initInGameInfos newP p2 newEnemies)
-        else ((), initInGameInfos p1 newP newEnemies)
+        if isP1 then ((), initInGameInfos newP p2 newEnemies walls)
+        else ((), initInGameInfos p1 newP newEnemies walls)
 
 prop_pre_handleCollisionPlayerWithEnemies :: Bool -> InGameInfos -> Bool
-prop_pre_handleCollisionPlayerWithEnemies isP1 (InGameInfos p1 p2 _) =
+prop_pre_handleCollisionPlayerWithEnemies isP1 (InGameInfos p1 p2 _ _) =
     let p = if isP1 then p1 else p2
     in not (isPlayerDead p)
+
+-- Detects if there is a collision between an object and a finite wall
+collisionWithWall :: Object -> FiniteWall -> Bool
+collisionWithWall o (FiniteWall wallObjects) =
+    collisionWithWallObject wallObjects o
+    where
+        collisionWithWallObject :: [Object] -> Object -> Bool
+        collisionWithWallObject [] _ = False
+        collisionWithWallObject (obj:nextObjs) po = collisionObject obj po || collisionWithWallObject nextObjs po
+
+-- Detects if there is a collision between an object and all game walls
+collisionWithWalls :: Object -> GameWalls -> Bool
+collisionWithWalls o gw =
+    let allWalls =
+            [ infiniteToFiniteWall (gameLeftWall gw)
+            , infiniteToFiniteWall (gameBackgoundLeftWall gw)
+            , infiniteToFiniteWall (gameRightWall gw)
+            , infiniteToFiniteWall (gameBackgoundRightWall gw)]
+             ++ gameFiniteWalls gw
+    in any (collisionWithWall o) allWalls
+
+-- Detects if there is a collision between a player and a finite wall
+collisionPlayerWithWall :: Player -> FiniteWall -> Bool
+collisionPlayerWithWall player wall = collisionWithWall (playerObject player) wall
+
+-- Detects if there is a collision between a player and all game walls
+collisionPlayerWithWalls :: Player -> GameWalls -> Bool
+collisionPlayerWithWalls player walls = collisionWithWalls (playerObject player) walls
 
 -- ============================================================
 -- ====================== IN GAME STATE =======================

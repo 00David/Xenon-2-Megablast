@@ -91,32 +91,3 @@ collisionObject o1 o2 = collisionHitbox (objectHitbox o1) (objectHitbox o2)
 
 prop_commutativity_collisionObject :: Object -> Object -> Bool
 prop_commutativity_collisionObject o1 o2 = (collisionObject o1 o2 == collisionObject o2 o1)
-
--- ============================================================
--- ====================== WALLS ===============================
--- ============================================================
-
--- a wall is a non empty list of static objects, with each collides with the next one in the list
-newtype Wall = Wall [Object]
-    deriving (Eq, Show)
-
-prop_wall_allStaticObject :: [Object] -> Bool
-prop_wall_allStaticObject [] = True
-prop_wall_allStaticObject (x:xs) = case x of
-    (MovableO _ _ _ _) -> False
-    (StaticO _ _) -> prop_wall_allStaticObject xs
-
-prop_wall_allCollideWithNextObject :: [Object] -> Bool
-prop_wall_allCollideWithNextObject [] = True
-prop_wall_allCollideWithNextObject (_:[]) = True
-prop_wall_allCollideWithNextObject (x:y:xs) = (collisionHitbox (objectHitbox x) (objectHitbox y)) && prop_wall_allCollideWithNextObject (y:xs)
-
-prop_inv_wall :: Wall -> Bool
-prop_inv_wall (Wall l) = length l > 0 && prop_wall_allStaticObject l && prop_wall_allCollideWithNextObject l
-
-initWall :: [Object] -> Wall
-initWall l
-    | length l == 0 = error "a wall must have at least one object"
-    | not (prop_wall_allStaticObject l) = error "all wall objects must be static"
-    | not (prop_wall_allCollideWithNextObject l) = error "each object must collide with the next in the list"
-    | otherwise = Wall l

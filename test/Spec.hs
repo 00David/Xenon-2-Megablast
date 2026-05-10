@@ -9,6 +9,7 @@ import qualified EnemySpec
 import qualified BackgroundSpec
 import qualified KeyboardSpec
 import qualified GameSpec
+import qualified WallSpec
 
 main :: IO ()
 main = hspec $ do
@@ -39,3 +40,6 @@ main = hspec $ do
 
     -- GAME
     describe "[Game]" GameSpec.spec
+
+    -- WALLS
+    describe "[WALLS]" WallSpec.spec
