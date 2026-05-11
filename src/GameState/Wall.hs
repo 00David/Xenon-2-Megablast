@@ -1,0 +1,282 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE InstanceSigs #-}
+module GameState.Wall (module GameState.Wall) where
+
+import Graphics.Gloss (Picture(Translate))
+
+import System.Random
+
+import qualified Data.Sequence as Seq
+
+import GameSetup
+import GameState.Rock
+import Graphics.Assets
+import Invariant
+import Objects.Hitbox
+import Objects.Objects
+import Data.Foldable (toList)
+
+-- ============================================================
+-- ====================== WALLS ===============================
+-- ============================================================
+
+prop_wall_allCollideWithNext :: Collidable a => [a] -> Bool
+prop_wall_allCollideWithNext [] = True
+prop_wall_allCollideWithNext (_:[]) = True
+prop_wall_allCollideWithNext (x:y:xs) = 
+    collision x y && prop_wall_allCollideWithNext (y:xs)
+
+-- a finite wall is a non empty list of collidables, with each colliding with the next one in the list
+newtype FiniteWall a = FiniteWall [a]
+    deriving (Eq, Show)
+
+instance Functor FiniteWall where
+    fmap :: (a -> b) -> FiniteWall a -> FiniteWall b
+    fmap f (FiniteWall list) = FiniteWall (fmap f list)
+
+instance Foldable FiniteWall where
+    foldr :: (a -> b -> b) -> b -> FiniteWall a -> b
+    foldr f z (FiniteWall xs) = foldr f z xs
+
+prop_inv_finiteWall :: (Invariant a, Collidable a) => FiniteWall a -> Bool
+prop_inv_finiteWall (FiniteWall l) = length l > 0 
+    && all prop_inv l
+    && prop_wall_allCollideWithNext l
+
+-- Filters a finite wall
+filterWall :: forall a. (a -> Bool) -> FiniteWall a -> FiniteWall a
+filterWall f (FiniteWall elems) = FiniteWall (filter f elems)
+
+initFiniteWall :: (Invariant a, Collidable a) => [a] -> FiniteWall a
+initFiniteWall l
+    | length l == 0 = error "a wall must have at least one collidable"
+    | not (all prop_inv l) = error "each contained element must satisfy its invariant"
+    | not (prop_wall_allCollideWithNext l) = error "collidable must collide with the next in the list"
+    | otherwise = FiniteWall l
+
+-- an infinite wall is a non empty list of static objects
+newtype InfiniteWall a = InfiniteWall [a]
+    deriving (Eq, Show)
+
+instance Functor InfiniteWall where
+    fmap :: (a -> b) -> InfiniteWall a -> InfiniteWall b
+    fmap f (InfiniteWall list) = InfiniteWall (fmap f list)
+
+prop_inv_infiniteWall :: Invariant a => InfiniteWall a -> Bool
+prop_inv_infiniteWall (InfiniteWall l) =  -- only a sublist is checked
+    let subList = take 100 l
+    in length subList > 0 && all prop_inv subList
+
+-- Partially filters an infinite wall : it will apply a filter only on a prefix of it
+partialFilterWall :: forall a. (a -> Bool) -> InfiniteWall a -> InfiniteWall a
+partialFilterWall f (InfiniteWall elems) = InfiniteWall (aux 0 elems)
+    where
+        aux :: Int -> [a] -> [a]
+        aux _ [] = error "wall must be infinite"
+        aux i l@(x:xs)
+            | i == nbTakeInfiniteWalls = l
+            | f x = x:(aux (i+1) xs)
+            | otherwise = aux (i+1) xs
+
+-- Initializes an infinite wall of rocks
+initInfiniteWall :: Bool -> Bool -> StdGen -> InfiniteWall Rock
+initInfiniteWall foreground left gen =
+    let 
+        -- Maximum width among all rock assets.
+        -- Used to compute how far walls may go outside the screen.
+        maxW = maximum (toList widthRocks)
+        -- Maximum allowed horizontal overflow outside the screen.
+        overflow = maxW * 0.6
+
+        -- Random X position bounds.
+        -- Left walls slightly overflow on the left side, right walls slightly overflow on the right side.
+        (lowerX, upperX) = 
+            if left
+                then (leftXScreenBound - overflow, leftXScreenBound)
+                else (rightXScreenBound - maxW, rightXScreenBound - maxW + overflow)
+        
+         -- Vertical spacing between wall segments (rocks).
+        cell = Seq.index heightRocks 0
+
+        -- Starting Y coordinate.
+        -- Background walls are vertically offset by half a cell.
+        baseY = if foreground then bottomYScreenBound else bottomYScreenBound+(cell/2)
+
+        -- Infinite sequence of Y coordinates for wall segments (rocks).
+        ys = map (\i -> baseY + fromIntegral i * cell) ([0..] :: [Int])
+
+        --  Random rock asset indexes
+        randomWalls = randomRs (0, nbRockAssets - 1) gen
+        -- Random X rock positions, might be outside of the screen
+        randomX = randomRs (lowerX, upperX) gen
+
+        -- Associates each rock asset index with a random X position.
+        randomValues = zip randomWalls randomX
+
+    in 
+        let wall = InfiniteWall (zipWith makeWallObject ys randomValues)
+        in 
+            if not (prop_inv_infiniteWall wall)
+                then error "invalid infinite wall"
+                else wall
+
+    where
+        -- Creates an inidvidual rock object, port of the infinite wall
+        -- First argument : Y position
+        -- Sencond argument : a pair (number of the rock asset index, X position)
+        makeWallObject :: Float -> (Int, Float) -> Rock
+        makeWallObject y (numRock, x) = 
+            let width = (Seq.index widthRocks numRock)
+                height = (Seq.index heightRocks numRock)
+                x2 = if left then x else 
+                    case numRock of -- Offset on right screen side if rocks of width < 90
+                        0 -> x
+                        1 -> x
+                        2 -> x+3
+                        3 -> x+6
+                        i -> error (show i++" out of bounds")
+                obj = initStaticObject (initHitboxRectangle x2 y width height)
+            in initRock obj numRock left
+
+nbTakeInfiniteWalls :: Int
+nbTakeInfiniteWalls = 20
+
+-- Converts an infinite wall to a finite wall, by only keeping a sub-part of it.
+infiniteToFiniteWall :: InfiniteWall a -> FiniteWall a
+infiniteToFiniteWall (InfiniteWall wallObjects) = (FiniteWall (take nbTakeInfiniteWalls wallObjects))
+
+data GameWalls = GameWalls {
+    gameLeftWall :: InfiniteWall Rock,
+    gameBackgoundLeftWall :: InfiniteWall Rock,
+    gameRightWall :: InfiniteWall Rock,
+    gameBackgoundRightWall :: InfiniteWall Rock,
+    gameFiniteWalls :: [FiniteWall Rock] -- other walls than the default ones
+} deriving (Eq, Show)
+
+prop_inv_gameWalls :: GameWalls -> Bool
+prop_inv_gameWalls (GameWalls leftWall leftWall2 rightWall rightWall2 walls) =
+    prop_inv_infiniteWall leftWall && prop_inv_infiniteWall leftWall2 &&
+    prop_inv_infiniteWall rightWall && prop_inv_infiniteWall rightWall2 &&
+    foldr (\w acc -> prop_inv_finiteWall w && acc) True walls
+
+startInitGameWalls :: StdGen -> GameWalls
+startInitGameWalls gen =
+    -- Split the given generator in independant ones for avoiding weird patterns in next generated random values
+    let (gen1, gen2) = split gen
+        (gen3, gen4) = split gen2
+
+        left1 = initInfiniteWall True True gen1
+        left2 = initInfiniteWall False True gen2
+        right1 = initInfiniteWall True False gen3
+        right2 = initInfiniteWall False False gen4
+    in (GameWalls left1 left2 right1 right2 [])
+
+initGameWalls :: InfiniteWall Rock -> InfiniteWall Rock -> InfiniteWall Rock -> InfiniteWall Rock -> [FiniteWall Rock] -> GameWalls
+initGameWalls left1 left2 right1 right2 walls
+    | not (prop_inv_infiniteWall left1) = error "left wall 1 does not respect infinite invariant"
+    | not (prop_inv_infiniteWall left2) = error "left wall 2 does not respect infinite invariant"
+    | not (prop_inv_infiniteWall right1) = error "right wall 1 does not respect infinite invariant"
+    | not (prop_inv_infiniteWall right2) = error "right wall 2 does not respect infinite invariant"
+    | any (not . prop_inv_finiteWall) walls = error "a wall does not respect finite invariant"
+    | otherwise = GameWalls left1 left2 right1 right2 walls
+
+-- ============================================================
+-- ==================== WALLS INVARIANT =======================
+-- ============================================================
+
+instance (Invariant a, Collidable a) => Invariant (FiniteWall a) where
+    prop_inv :: FiniteWall a -> Bool
+    prop_inv = prop_inv_finiteWall
+
+instance (Invariant a) => Invariant (InfiniteWall a) where
+    prop_inv :: InfiniteWall a -> Bool
+    prop_inv = prop_inv_infiniteWall
+
+instance Invariant GameWalls where
+    prop_inv :: GameWalls -> Bool
+    prop_inv = prop_inv_gameWalls
+
+-- ============================================================
+-- =================== WALLS RENDERABLE =======================
+-- ============================================================
+
+instance (Renderable a) => Renderable (FiniteWall a) where
+    getTranslatedAssets :: GameAssets -> FiniteWall a -> [Picture]
+    getTranslatedAssets ga (FiniteWall rends) = concatMap (getTranslatedAssets ga) rends
+
+instance (Renderable a) => Renderable (InfiniteWall a) where
+    getTranslatedAssets :: GameAssets -> InfiniteWall a -> [Picture]
+    getTranslatedAssets ga wall = getTranslatedAssets ga (infiniteToFiniteWall wall)
+
+instance Renderable GameWalls where
+    getTranslatedAssets :: GameAssets -> GameWalls -> [Picture]
+    getTranslatedAssets ga gw = getTranslatedGameWallAssets ga gw
+
+-- Returns a list of translated game wall assets. For infinite walls, it only translates a finite sub-part of them.
+getTranslatedGameWallAssets :: GameAssets -> GameWalls -> [Picture]
+getTranslatedGameWallAssets ga (GameWalls left1 left2 right1 right2 finiteWalls) = 
+    (getTranslatedAssets ga left2) ++ 
+    (getTranslatedAssets ga left1) ++ 
+    (getTranslatedAssets ga right2) ++ 
+    (getTranslatedAssets ga right1) ++ 
+    concatMap (getTranslatedAssets ga) finiteWalls
+
+-- ============================================================
+-- ==================== WALLS COLLIDABLE ======================
+-- ============================================================
+
+instance (Collidable a) => Collidable (FiniteWall a) where
+    getObjects :: FiniteWall a -> [Object]
+    getObjects (FiniteWall colls) = concatMap getObjects colls
+
+    collision :: Collidable b => FiniteWall a -> b -> Bool
+    collision wall other =
+        let objs1 = getObjects wall
+            objs2 = getObjects other
+        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) objs1
+
+    willCollide :: Collidable b => FiniteWall a -> b -> Float -> Bool  
+    willCollide wall other screenSpeed =
+        let objs1 = getObjects wall
+            objs2 = getObjects other
+            movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
+        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
+
+instance (Collidable a) => Collidable (InfiniteWall a) where
+    getObjects :: InfiniteWall a -> [Object]
+    getObjects wall = getObjects (infiniteToFiniteWall wall)
+
+    collision :: Collidable b => InfiniteWall a -> b -> Bool
+    collision wall other =
+        let objs1 = getObjects wall
+            objs2 = getObjects other
+        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) objs1
+
+    willCollide :: Collidable b => InfiniteWall a -> b -> Float -> Bool  
+    willCollide wall other screenSpeed =
+        let objs1 = getObjects wall
+            objs2 = getObjects other
+            movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
+        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
+
+instance Collidable GameWalls where
+    getObjects :: GameWalls -> [Object]
+    getObjects (GameWalls left1 left2 right1 right2 finiteWalls) =
+        getObjects left1
+        ++ getObjects left2
+        ++ getObjects right1
+        ++ getObjects right2
+        ++ concatMap getObjects finiteWalls
+
+    collision :: Collidable b => GameWalls -> b -> Bool
+    collision gw other =
+        let objs1 = getObjects gw
+            objs2 = getObjects other
+        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) objs1
+
+    willCollide :: Collidable b => GameWalls -> b -> Float -> Bool
+    willCollide gw other screenSpeed =
+        let objs1 = getObjects gw
+            objs2 = getObjects other
+            movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
+        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1

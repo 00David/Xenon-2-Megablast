@@ -1,5 +1,7 @@
+{-# LANGUAGE InstanceSigs #-}
 module Objects.Hitbox (module Objects.Hitbox) where
 
+import Invariant
 import Utils
 
 -- ============================================================
@@ -11,6 +13,10 @@ data Hitbox = Circle Float Float Float -- x y center coordinates + radius. Radiu
     | Hitboxes Float Float [Hitbox] -- x y center coordinates + a list of hitboxes. length > 0. The center must be part of at least 1 hitbox.
     deriving (Eq, Show)
 
+instance Invariant Hitbox where
+    prop_inv :: Hitbox -> Bool
+    prop_inv = prop_inv_hitbox 
+
 prop_inv_hitbox :: Hitbox -> Bool
 prop_inv_hitbox (Circle _ _ r) = r >= 0 -- if r == 0 : it is a point
 prop_inv_hitbox (Rectangle _ _ w h) = w > 0 && h > 0
@@ -18,7 +24,7 @@ prop_inv_hitbox (Hitboxes x y l) =
     length l > 0
     && all prop_inv_hitbox l
     && any (partOfHitbox x y) l
-        
+
 -- Indicates if the given (x,y) coordinates are part of the given hitbox 
 partOfHitbox :: Float -> Float -> Hitbox -> Bool
 partOfHitbox x y (Circle xh yh r) = ((x - xh)*(x - xh)) + ((y - yh)*(y - yh)) <= r*r

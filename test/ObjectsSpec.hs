@@ -5,9 +5,7 @@ module ObjectsSpec (
     spec
 )
 where
-
-import Graphics.Gloss (Picture (Blank))
-
+    
 import Test.Hspec
 import Test.QuickCheck
 
@@ -20,7 +18,6 @@ spec = do
   initDirectionSpec
   initObjectSpeedSpec
   initObjectSpec
-  objectGetPictureSpec
   objectGetHitboxSpec
   objectGetDirectionSpec
   objectGetSpeedSpec
@@ -75,16 +72,16 @@ instance Arbitrary TestObject where
         d <- arbitrary :: Gen TestDirection
         s <- arbitrary :: Gen TestObjectSpeed
         oneof
-          [ return $ TestObject (MovableO Blank (getHitbox h) (getDirection d) (getObjectSpeed s)), 
-          return $ TestObject (StaticO Blank (getHitbox h))]
+          [ return $ TestObject (MovableO (getHitbox h) (getDirection d) (getObjectSpeed s)), 
+          return $ TestObject (StaticO (getHitbox h))]
 
 prop_initMovableObject_preservesInvariant :: TestHitbox -> TestDirection -> TestObjectSpeed -> Property
 prop_initMovableObject_preservesInvariant h d s =
-    property $ prop_inv_object (initMovableObject Blank (getHitbox h) (getDirection d) (getObjectSpeed s)) -- Blank : dummy picture
+    property $ prop_inv_object (initMovableObject (getHitbox h) (getDirection d) (getObjectSpeed s))
 
 prop_initStaticObject_preservesInvariant :: TestHitbox -> Property
 prop_initStaticObject_preservesInvariant h = 
-    property $ prop_inv_object (initStaticObject Blank (getHitbox h)) -- Blank : dummy picture
+    property $ prop_inv_object (initStaticObject (getHitbox h))
 
 initObjectSpec :: SpecWith ()
 initObjectSpec = do
@@ -95,21 +92,6 @@ initObjectSpec = do
         it "preserves the Static Object invariant for valid Static Objects" $
             property prop_initStaticObject_preservesInvariant
 
-objectGetPictureSpec :: Spec
-objectGetPictureSpec = do
-    describe "objectPicture (unit tests)" $ do
-        it "objectPicture returns the correct picture for MovableO" $ do
-            let h = Rectangle 0 0 10 10
-                d = Direction 1 0
-                s = (ObjectSpeed 5)
-                obj = MovableO Blank h d s
-            objectPicture obj `shouldBe` Blank
-
-        it "objectPicture returns the correct picture for StaticO" $ do
-            let h = Circle 5 5 3
-                obj = StaticO Blank h
-            objectPicture obj `shouldBe` Blank
-
 objectGetHitboxSpec :: Spec
 objectGetHitboxSpec = do
     describe "objectHitbx (unit tests)" $ do
@@ -117,12 +99,12 @@ objectGetHitboxSpec = do
             let h = Rectangle 0 0 10 10
                 d = Direction 1 0
                 s = (ObjectSpeed 5)
-                obj = MovableO Blank h d s
+                obj = MovableO h d s
             objectHitbox obj `shouldBe` h
 
         it "objectHitbx returns the correct hitbox for StaticO" $ do
             let h = Circle 5 5 3
-                obj = StaticO Blank h
+                obj = StaticO h
             objectHitbox obj `shouldBe` h
 
 objectGetDirectionSpec :: Spec
@@ -132,12 +114,12 @@ objectGetDirectionSpec = do
             let h = Rectangle 0 0 10 10
                 d = Direction (-1) 1
                 s = (ObjectSpeed 7)
-                obj = MovableO Blank h d s
+                obj = MovableO h d s
             objectDirection obj `shouldBe` d
 
         it "objectDirection returns (0,0) for StaticO" $ do
             let h = Circle 0 0 2
-                obj = StaticO Blank h
+                obj = StaticO h
             objectDirection obj `shouldBe` Direction 0 0
 
 objectGetSpeedSpec :: Spec
@@ -147,12 +129,12 @@ objectGetSpeedSpec = do
             let h = Rectangle 0 0 10 10
                 d = Direction 0 1
                 s = (ObjectSpeed 42)
-                obj = MovableO Blank h d s
+                obj = MovableO h d s
             objectSpeed obj `shouldBe` s
 
         it "objectSpeed returns 0 for StaticO" $ do
             let h = Circle 1 1 5
-                obj = StaticO Blank h
+                obj = StaticO h
             objectSpeed obj `shouldBe` (ObjectSpeed 0)
 
 moveObjectSpec :: Spec
@@ -162,27 +144,27 @@ moveObjectSpec = do
             let h = Rectangle 0 0 10 10
                 d = Direction 1 (-1)
                 s = (ObjectSpeed 5)
-                obj = MovableO Blank h d s
-            moveObject obj 0 `shouldBe` (MovableO Blank (Rectangle 5 (-5) 10 10) d s)
+                obj = MovableO h d s
+            moveObject obj 0 `shouldBe` (MovableO (Rectangle 5 (-5) 10 10) d s)
 
         it "does not move MovableO if direction  is (0, 0)" $ do
             let h = Rectangle 0 0 10 10
                 d = Direction 0 0
                 s = (ObjectSpeed 5)
-                obj = MovableO Blank h d s
-            moveObject obj 0 `shouldBe` (MovableO Blank (Rectangle 0 0 10 10) d s)
+                obj = MovableO h d s
+            moveObject obj 0 `shouldBe` (MovableO (Rectangle 0 0 10 10) d s)
 
         it "moves StaticO according to screen speed (downwards)" $ do
             let h = Rectangle 0 10 5 5
-                obj = StaticO Blank h
+                obj = StaticO h
                 screenS = 3
-            moveObject obj screenS `shouldBe` (StaticO Blank (Rectangle 0 7 5 5))
+            moveObject obj screenS `shouldBe` (StaticO (Rectangle 0 7 5 5))
 
         it "does not move StaticO if screen speed is 0" $ do
             let h = Rectangle 0 10 5 5
-                obj = StaticO Blank h
+                obj = StaticO h
                 screenS = 0
-            moveObject obj screenS `shouldBe` (StaticO Blank (Rectangle 0 10 5 5))
+            moveObject obj screenS `shouldBe` (StaticO (Rectangle 0 10 5 5))
 
 moveObjectQuickCheckSpec :: Spec
 moveObjectQuickCheckSpec = do
@@ -199,54 +181,54 @@ collisionObjectSpec = do
     describe "collisionObject (unit tests)" $ do
         -- Rectangle vs Rectangle
         it "detects collision between overlapping rectangles" $ do
-            let o1 = StaticO Blank (Rectangle 0 0 10 10)
-                o2 = StaticO Blank (Rectangle 5 5 10 10)
+            let o1 = StaticO (Rectangle 0 0 10 10)
+                o2 = StaticO (Rectangle 5 5 10 10)
             collisionObject o1 o2 `shouldBe` True
 
         it "detects no collision when rectangles are apart" $ do
-            let o1 = StaticO Blank (Rectangle 0 0 10 10)
-                o2 = StaticO Blank (Rectangle 20 20 5 5)
+            let o1 = StaticO (Rectangle 0 0 10 10)
+                o2 = StaticO (Rectangle 20 20 5 5)
             collisionObject o1 o2 `shouldBe` False
 
         -- Circle vs Circle
         it "detects collision between overlapping circles" $ do
-            let o1 = StaticO Blank (Circle 0 0 5)
-                o2 = StaticO Blank (Circle 3 4 5)
+            let o1 = StaticO (Circle 0 0 5)
+                o2 = StaticO (Circle 3 4 5)
             collisionObject o1 o2 `shouldBe` True
 
         it "detects no collision between distant circles" $ do
-            let o1 = StaticO Blank (Circle 0 0 5)
-                o2 = StaticO Blank (Circle 20 0 5)
+            let o1 = StaticO (Circle 0 0 5)
+                o2 = StaticO (Circle 20 0 5)
             collisionObject o1 o2 `shouldBe` False
 
         -- Circle vs Rectangle
         it "detects collision between circle and rectangle" $ do
-            let o1 = StaticO Blank (Circle 5 5 5)
-                o2 = StaticO Blank (Rectangle 8 8 10 10)
+            let o1 = StaticO (Circle 5 5 5)
+                o2 = StaticO (Rectangle 8 8 10 10)
             collisionObject o1 o2 `shouldBe` True
 
         it "detects no collision between circle and rectangle" $ do
-            let o1 = StaticO Blank (Circle 0 0 2)
-                o2 = StaticO Blank (Rectangle 10 10 5 5)
+            let o1 = StaticO (Circle 0 0 2)
+                o2 = StaticO (Rectangle 10 10 5 5)
             collisionObject o1 o2 `shouldBe` False
 
         -- Movable vs Static
         it "detects collision between MovableO and StaticO" $ do
-            let o1 = MovableO Blank (Rectangle 0 0 10 10) (Direction 1 0) (ObjectSpeed 1)
-                o2 = StaticO Blank (Rectangle 5 5 10 10)
+            let o1 = MovableO (Rectangle 0 0 10 10) (Direction 1 0) (ObjectSpeed 1)
+                o2 = StaticO (Rectangle 5 5 10 10)
             collisionObject o1 o2 `shouldBe` True
 
         -- Hitboxes (list)
         it "detects collision if one hitbox inside list collides" $ do
             let hlist = Hitboxes 0 0 [Rectangle 0 0 10 10, Circle 20 20 5]
-                o1 = StaticO Blank hlist
-                o2 = StaticO Blank (Circle 5 5 2)
+                o1 = StaticO hlist
+                o2 = StaticO (Circle 5 5 2)
             collisionObject o1 o2 `shouldBe` True
 
         it "detects no collision if none collide" $ do
             let hlist = Hitboxes 0 0 [Rectangle 0 0 10 10, Circle 20 20 5]
-                o1 = StaticO Blank hlist
-                o2 = StaticO Blank (Circle 100 100 2)
+                o1 = StaticO hlist
+                o2 = StaticO (Circle 100 100 2)
             collisionObject o1 o2 `shouldBe` False
 
 commutativityCollisionObjectSpec :: Spec

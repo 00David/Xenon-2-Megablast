@@ -10,7 +10,7 @@ import Test.QuickCheck
 
 import Objects.Hitbox
 import Objects.Objects
-import Objects.Wall
+import GameState.Wall
 
 spec :: Spec
 spec = do

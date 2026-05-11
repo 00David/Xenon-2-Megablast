@@ -15,8 +15,6 @@ import GameState.Game
 import GameState.Player
 import Graphics.Assets
 import Graphics.Background
-import Objects.Objects
-import Objects.Hitbox
 import RandomGenerations
 import Keyboard
 
@@ -38,30 +36,24 @@ renderIO (Game _ (StartMenu option) _ bgnd) =
     in return (Pictures ((getTranslatedBackgrounds bgnd)++[subtitle, title, textOption1, textOption2, select1, select2]))
 
 -- In game
-renderIO (Game _ (InGame (InGameInfos p1 p2 enemies walls)) assts bgnd) =
-    let p1o = playerObject p1
-        (p1x, p1y) = centerHitbox (objectHitbox p1o)
-        
-        picturesP1Boosters = getTranslatedBoosterAssets p1 assts -- get the sprites of the enabled spaceship boosters
-        picturesEnemies = getTranslatedEnemiesAssets enemies -- get the sprites of the enemies
-        picturesBackground = getTranslatedBackgrounds bgnd
-        picturesWalls = getTranslatedGameWallAssets walls
-        picturesBootmBar = getTranslatedBottomBar p1 p2 assts
-        
+renderIO (Game _ (InGame igi) assts bgnd) =
+    let
+        player1 = (gamePlayer1 igi)
+        player2 = (gamePlayer2 igi)
     in
         return (Pictures (
-            picturesBackground ++ picturesWalls ++
-            picturesP1Boosters ++
-            [Translate p1x p1y (objectPicture p1o)] ++
-            picturesEnemies ++
-            picturesBootmBar
+            (getTranslatedAssets assts bgnd) ++
+            (getTranslatedAssets assts igi) ++
+            (getTranslatedBottomBar assts 
+                    (playerScore player1) (playerHealth player1) (playerLifes player1)
+                    (playerScore player2) (playerHealth player2) (playerLifes player2))
             ))  
   
 -- Event handling
 handleEventsIO :: Event -> Game -> IO Game
 
 -- Start menu
-handleEventsIO ev game@(Game kbd (StartMenu option) assts _) = do
+handleEventsIO ev game@(Game kbd (StartMenu option) _ _) = do
     let newKBD = (handleKeyEvent ev kbd) -- keyboard update
 
     -- if the space bar is pressed on "Start", launches the game
@@ -71,7 +63,7 @@ handleEventsIO ev game@(Game kbd (StartMenu option) assts _) = do
             gen <- newStdGen
             return game{
                 keyboard = initKeyboard,
-                state = startInitInGame assts gen vx vy 0 0 0 0
+                state = startInitInGame gen vx vy 0 0 0 0
                 }
         else 
             if isKeyDown (SpecialKey KeyEsc) newKBD
@@ -112,7 +104,7 @@ updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos p1 p2 _ walls)) assts
     -- in case of collision with the virus, moves it elsewhere
     if length (gameEnemies ig2) == 0 then trace "VIRUS DETRUIT !" $ do
         (newVX, newVY) <- generateVirusCoordinates
-        let newVo = initStaticEnemyRectangleObject (virusPic assts) newVX newVY
+        let newVo = initStaticEnemyRectangleObject newVX newVY
             newV = initEnemy newVo 1
             newEnemies = [newV]
         return game{state = (initInGame(initInGameInfos (gamePlayer1 ig2) p2 newEnemies walls)), background = newBgnd}

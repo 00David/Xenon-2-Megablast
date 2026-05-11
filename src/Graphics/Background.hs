@@ -1,10 +1,13 @@
+{-# LANGUAGE InstanceSigs #-}
 module Graphics.Background (module Graphics.Background) where
 
 import Graphics.Gloss
 
+import Data.Fixed
+
 import Graphics.Assets
 import GameSetup
-import Data.Fixed
+import Invariant
 
 heightBackgroundPicture:: Float
 heightBackgroundPicture = 1100
@@ -14,6 +17,14 @@ data Background = Background{
     backgroundScrollingSpeed :: Float,
     backgroundY :: Float
 } deriving (Eq, Show)
+
+instance Invariant Background where
+    prop_inv :: Background -> Bool
+    prop_inv = prop_inv_background 
+
+instance Renderable Background where
+    getTranslatedAssets :: GameAssets -> Background -> [Picture]
+    getTranslatedAssets _ bgnd = getTranslatedBackgrounds bgnd
 
 -- Ensures that background pictures always cover entirely screen height, by having y part of [0, heightBackgroundPicture[
 prop_inv_background :: Background -> Bool

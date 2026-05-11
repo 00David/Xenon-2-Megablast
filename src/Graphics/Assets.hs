@@ -1,6 +1,7 @@
+{-# LANGUAGE InstanceSigs #-}
 module Graphics.Assets (module Graphics.Assets) where
 
-import Graphics.Gloss ( Picture(Translate) )
+import Graphics.Gloss ( Picture(Translate, Color, Rotate), rectangleWire, circleSolid, red, blue )
 import Graphics.Gloss.Juicy
 
 import Data.Char
@@ -8,12 +9,19 @@ import Data.Sequence
 import qualified Data.Sequence as Seq
 import qualified Data.List as List
 
-import GameState.Player
-import GameState.Enemy
 import GameSetup
-import Objects.Objects
 import Objects.Hitbox
-import Objects.Wall
+
+-- ============================================================
+-- ================= RENDERABLE TYPECLASS =====================
+-- ============================================================
+
+class Renderable a where
+    getTranslatedAssets :: GameAssets -> a -> [Picture]
+
+-- ============================================================
+-- ======================== GAME ASSETS =======================
+-- ============================================================
 
 -- Loads a PNG Picture, from a given path
 loadPNG :: String -> IO Picture
@@ -23,15 +31,11 @@ loadPNG path = do
         Nothing  -> error ("Impossible to load "++path)
         Just png -> return png
 
--- ============================================================
--- ======================== GAME ASSETS =======================
--- ============================================================
-
 data GameAssets = GameAssets {
     -- players
     p1Pic :: Picture,
     p2Pic :: Picture,
-    pBoosterPics :: [Picture],
+    pBoosterPics :: Seq Picture,
     -- enemies
     virusPic :: Picture,
     -- bottom bar
@@ -42,8 +46,8 @@ data GameAssets = GameAssets {
     p1HealthBarPics :: HealtBarAssets,
     p2HealthBarPics :: HealtBarAssets,
     -- walls
-    leftWallPics :: [Picture],
-    rightWallPics :: [Picture]
+    leftWallPics :: Seq Picture,
+    rightWallPics :: Seq Picture
 } deriving Show
 
 initGameAssets :: IO GameAssets
@@ -65,32 +69,49 @@ initGameAssets = do
     p2Health <- initHealthP2Assets
     leftWalls <- initWallAssets True
     rightWalls <- initWallAssets False
-    return $ GameAssets p1 p2 boosters v bottomLeft bottomBar bottomRight ds p1Health p2Health leftWalls rightWalls
+    return $ GameAssets p1 p2 (Seq.fromList boosters) v 
+        bottomLeft bottomBar bottomRight ds p1Health p2Health leftWalls rightWalls
+
+-- Translates a hitbox into its visible borders, for debug purpose
+translateHitbox :: Hitbox -> [Picture]
+translateHitbox (Circle x y r) = 
+    [Translate x y $
+        Color red $
+        circleSolid r
+    ]
+translateHitbox (Rectangle x y w h) = 
+    let centerX = x + (w / 2)
+        centerY = y + (h / 2)
+    in [Translate centerX centerY $
+        Color blue $
+        rectangleWire w h
+    ]
+translateHitbox (Hitboxes _ _ l) = foldr (\h acc -> (translateHitbox h) <> acc) [] l
 
 -- ============================================================
 -- ======================= BOTTOM BAR =========================
 -- ============================================================
 
 -- Gets bottom bar translated assets on the screen, for given players.
-getTranslatedBottomBar :: Player -> Player -> GameAssets -> [Picture]
-getTranslatedBottomBar p1 p2 assts =
-    let picturesDigits = digitPics assts 
+getTranslatedBottomBar :: GameAssets -> Int -> Int -> Int -> Int -> Int -> Int -> [Picture]
+getTranslatedBottomBar ga scoreP1 healthP1 lifesP1 scoreP2 healthP2 lifesP2  =
+    let picturesDigits = digitPics ga 
     in
         -- bottom left corner assets
-        [(Translate (leftXScreenBound+37.5) (bottomYScreenBound+16.5) (bottomLeftPic assts)),
+        [(Translate (leftXScreenBound+37.5) (bottomYScreenBound+16.5) (bottomLeftPic ga)),
         (Translate (leftXScreenBound+14) (bottomYScreenBound+17) (letterPBlackPic (picturesDigits))),
         (Translate (leftXScreenBound+36) (bottomYScreenBound+17) (digit1BlackPic picturesDigits))]
         -- player 1 score assets
-        ++(getTranslatedScoreAssets True (playerScore p1) assts)++
+        ++(getTranslatedScoreAssets ga True scoreP1)++
         -- bottom center assets
-        [(Translate 0 (bottomYScreenBound+16.5) (bottomBarPic assts))]
-        ++(getTranslatedHealthAssets (playerHealth p1) (playerHealth p2) assts)++
-        [(Translate (-68) (bottomYScreenBound+16.5) (getDigitAsset (playerLifes p1) assts)),
-        (Translate 68 (bottomYScreenBound+16.5) (getDigitAsset (playerLifes p2) assts))]
+        [(Translate 0 (bottomYScreenBound+16.5) (bottomBarPic ga))]
+        ++(getTranslatedHealthAssets ga healthP1 healthP2)++
+        [(Translate (-68) (bottomYScreenBound+16.5) (getDigitAsset ga lifesP1)),
+        (Translate 68 (bottomYScreenBound+16.5) (getDigitAsset ga lifesP2))]
         -- player 2 score assets
-        ++(getTranslatedScoreAssets False (playerScore p2) assts)++
+        ++(getTranslatedScoreAssets ga False scoreP2)++
         -- bottom right corner assets
-        [(Translate (rightXScreenBound-37.5) (bottomYScreenBound+16.5) (bottomRightPic assts)),
+        [(Translate (rightXScreenBound-37.5) (bottomYScreenBound+16.5) (bottomRightPic ga)),
         (Translate (rightXScreenBound-36) (bottomYScreenBound+17) (letterPBlackPic picturesDigits)),
         (Translate (rightXScreenBound-14) (bottomYScreenBound+17) (digit2BlackPic picturesDigits))]
 
@@ -132,20 +153,20 @@ prop_post_scoreToString score =
 -- Gets score digit assets translated on the screen, for a given player score
 -- First argument : indicates if it is about player1's score (or player2's score) (if assets must be translated on the left or right part of the bottom bar)
 -- Second argument : the player's score
-getTranslatedScoreAssets :: Bool -> Int -> GameAssets -> [Picture]
-getTranslatedScoreAssets isP1 score assts =
+getTranslatedScoreAssets :: GameAssets -> Bool -> Int -> [Picture]
+getTranslatedScoreAssets ga isP1 score =
     let xPadding = if isP1 then leftXScreenBound+100 else rightXScreenBound-100-27*6
         scoreStr = scoreToString score
 
         -- builds the array of digit Picture, iterating over the digit caracters
         aux :: Int -> String -> [Picture]
         aux _ [] = []
-        aux i (d:ds) = ((Translate (xPadding+(27*(fromIntegral i)))) (bottomYScreenBound+16.5) (getDigitAsset (digitToInt d) assts)):(aux (i+1) ds)
+        aux i (d:ds) = ((Translate (xPadding+(27*(fromIntegral i)))) (bottomYScreenBound+16.5) (getDigitAsset ga (digitToInt d))):(aux (i+1) ds)
     in aux 0 scoreStr
 
 
-prop_post_getTranslatedScoreAssets :: Bool -> Int -> GameAssets -> Bool
-prop_post_getTranslatedScoreAssets isP1 score assts = (List.length (getTranslatedScoreAssets isP1 score assts)) == 7
+prop_post_getTranslatedScoreAssets :: GameAssets -> Bool -> Int -> Bool
+prop_post_getTranslatedScoreAssets ga isP1 score = (List.length (getTranslatedScoreAssets ga isP1 score)) == 7
 
 -- ============================================================
 -- ==================== HEALTH BAR ASSETS =====================
@@ -171,38 +192,38 @@ initHealthP2Assets = do
 
 -- Returns the correct health asset for the player (player 1 or 2, according to first argument), 
 -- for a given health (second argument, part of ]0, 100])
-getHealthAsset :: Bool -> Int -> GameAssets -> Picture
-getHealthAsset isP1 health gameAssets = 
-    let pHealthBarPics = if isP1 then p1HealthBarPics gameAssets else p2HealthBarPics gameAssets
+getHealthAsset :: GameAssets -> Bool -> Int -> Picture
+getHealthAsset ga isP1 health = 
+    let pHealthBarPics = if isP1 then p1HealthBarPics ga else p2HealthBarPics ga
     in Seq.index (healthPics pHealthBarPics) ((health - 1) `div` 10)
 
-prop_pre_getHealthAsset :: Int -> GameAssets -> Bool
-prop_pre_getHealthAsset health _
+prop_pre_getHealthAsset :: GameAssets -> Int -> Bool
+prop_pre_getHealthAsset _ health
     | health <= 0 || health > 100 = False
     | otherwise = True
 
 -- Returns the correct health assets for both players 1 and 2 given healths. 
 -- If a player has exactly 0 health, no asset is returned for him.
-getTranslatedHealthAssets :: Int -> Int -> GameAssets -> [Picture]
-getTranslatedHealthAssets p1Health p2Health assts
+getTranslatedHealthAssets :: GameAssets -> Int -> Int  -> [Picture]
+getTranslatedHealthAssets ga p1Health p2Health
     | p1Health < 0 = error "player1 health must be positive"
     | p1Health > 100 = error "player1 health cannot be greater than 100"
     | p2Health < 0 = error "player2 health must be positive"
     | p2Health > 100 = error "player1 health cannot be greater than 100"
     | otherwise = 
-            (if p1Health == 0 then [] else [(Translate (-169) (bottomYScreenBound+17) (getHealthAsset True p1Health assts))])
+            (if p1Health == 0 then [] else [(Translate (-169) (bottomYScreenBound+17) (getHealthAsset ga True p1Health))])
             ++
-            (if p2Health == 0 then [] else [(Translate 169 (bottomYScreenBound+17) (getHealthAsset True p2Health assts))])
+            (if p2Health == 0 then [] else [(Translate 169 (bottomYScreenBound+17) (getHealthAsset ga True p2Health))])
 
-prop_pre_getTranslatedHealthAssets :: Int -> Int -> GameAssets -> Bool
-prop_pre_getTranslatedHealthAssets p1Health p2Health _
+prop_pre_getTranslatedHealthAssets :: GameAssets -> Int -> Int  -> Bool
+prop_pre_getTranslatedHealthAssets _ p1Health p2Health
     | p1Health < 0 || p1Health > 100 = False
     | p2Health < 0 || p2Health > 100 = False
     | otherwise = True
 
-prop_post_getTranslatedHealthAssets :: Int -> Int -> GameAssets -> Bool
-prop_post_getTranslatedHealthAssets p1Health p2Health assts =
-    let healthAssets = getTranslatedHealthAssets p1Health p2Health assts
+prop_post_getTranslatedHealthAssets :: GameAssets -> Int -> Int -> Bool
+prop_post_getTranslatedHealthAssets ga p1Health p2Health =
+    let healthAssets = getTranslatedHealthAssets ga p1Health p2Health
     in case (p1Health, p2Health) of
         (0, 0) -> List.length healthAssets == 0
         (0, _) -> List.length healthAssets == 1
@@ -232,97 +253,23 @@ initDigitAssets = do
     return $ DigitAssets (Seq.fromList ds) letterP digit1Black digit2Black letterPBlack
 
 -- Returns the non-black digit asset for the given Int
-getDigitAsset :: Int -> GameAssets -> Picture
-getDigitAsset i assts
+getDigitAsset :: GameAssets -> Int -> Picture
+getDigitAsset ga i
     | i < 0 = error "Int cannot be strictly negative"
     | i > 9 = error "Int cannot be strictly greater than 9"
-    | otherwise = Seq.index (digits (digitPics assts)) i
+    | otherwise = Seq.index (digits (digitPics ga)) i
 
-prop_pre_getDigitAsset :: Int -> GameAssets -> Bool
-prop_pre_getDigitAsset i _
+prop_pre_getDigitAsset :: GameAssets -> Int -> Bool
+prop_pre_getDigitAsset _ i
     | i < 0 || i > 9 = False
     | otherwise = True
 
 -- ============================================================
--- ====================== BOOSTER ASSETS ======================
+-- ====================== WALL ASSETS =========================
 -- ============================================================
 
--- Returns a list of translated booster assets for boosters only enabled when moving with the right player direction.
-getTranslatedBoosterAssets :: Player -> GameAssets -> [Picture]
--- (pBoosterPics assts)[0] = booster_left
--- (pBoosterPics assts)[1] = booster_right
--- (pBoosterPics assts)[2] = booster_top_left
--- (pBoosterPics assts)[3] = booster_top_right
-getTranslatedBoosterAssets player assts = 
-    let po = playerObject player
-        (Direction dx dy) = objectDirection po
-        (px, py) = centerHitbox (objectHitbox po)
-
-        aux :: [Picture] -> Int -> [Picture]
-        aux [] _ = []
-        aux (pic_booster:xs) i
-            | i == 0 = if dy > 0 then (Translate (px-16) (py-50) pic_booster):(aux xs (i+1)) else (aux xs (i+1))
-            | i == 1 = if dy > 0 then (Translate (px+16) (py-50) pic_booster):(aux xs (i+1)) else (aux xs (i+1))
-            | i == 2 = if dy < 0 then (Translate (px-25) (py+17) pic_booster):(aux xs (i+1)) else (aux xs (i+1))
-            | i == 3 = if dy < 0 then (Translate (px+25) (py+17) pic_booster):(aux xs (i+1)) else (aux xs (i+1))
-            | otherwise = error "cannot have more than 4 blaster pictures in the initial Picture array"
-    in aux (pBoosterPics assts) 0
-
-prop_post_getTranslatedBoosterAssets :: Player -> GameAssets -> Bool
-prop_post_getTranslatedBoosterAssets player assts = 
-    let boosterPics = getTranslatedBoosterAssets player assts
-    in (List.length boosterPics) == 2 || (List.length boosterPics) == 0
-
--- ============================================================
--- ====================== ENEMIES ASSETS ======================
--- ============================================================
-
--- Returns a list of translated enemies assets.
-getTranslatedEnemiesAssets :: [Enemy] -> [Picture]
-getTranslatedEnemiesAssets [] = []
-getTranslatedEnemiesAssets (enemy:xs) = 
-    let eo = enemyObject enemy
-        pic = objectPicture eo
-        h = objectHitbox eo
-    in (translateHitbox h pic) ++ getTranslatedEnemiesAssets xs where
-        translateHitbox :: Hitbox -> Picture -> [Picture]
-        translateHitbox (Circle x y _) p = [Translate x y p]
-        translateHitbox (Rectangle x y w h) p = 
-            let centerX = x + (w / 2)
-                centerY = y + (h / 2)
-            in [Translate centerX centerY p]
-        translateHitbox (Hitboxes _ _ l) p = foldr (\h acc -> (translateHitbox h p) <> acc) [] l
-
--- ============================================================
--- ==================== WALL ASSETS =====================
--- ============================================================
-
-initWallAssets :: Bool -> IO [Picture]
+initWallAssets :: Bool -> IO (Seq Picture)
 initWallAssets left = do
-    let wallSide = if left then "left_wall" else "right_wall"
-    imgs <- sequence [loadPNG ("./assets/walls/" ++ wallSide ++ show n ++ ".png") | n <- [0..3]]
-    return imgs
-
--- Returns a list of translated wall assets.
-getTranslatedWallAssets :: FiniteWall -> [Picture]
-getTranslatedWallAssets (FiniteWall []) = []
-getTranslatedWallAssets (FiniteWall (wall:xs)) = 
-    let pic = objectPicture wall
-        h = objectHitbox wall
-    in (translateHitbox h pic) ++ getTranslatedWallAssets (FiniteWall xs) where
-        translateHitbox :: Hitbox -> Picture -> [Picture]
-        translateHitbox (Circle x y _) p = [Translate x y p]
-        translateHitbox (Rectangle x y w h) p = 
-            let centerX = x + (w / 2)
-                centerY = y + (h / 2)
-            in [Translate centerX centerY p]
-        translateHitbox (Hitboxes _ _ l) p = foldr (\h acc -> (translateHitbox h p) <> acc) [] l
-
--- Returns a list of translated game wall assets. For infinite walls, it only translates a finite sub-part of them.
-getTranslatedGameWallAssets :: GameWalls -> [Picture]
-getTranslatedGameWallAssets (GameWalls leftWall leftWall2 rightWall rightWall2 walls) = 
-    getTranslatedWallAssets (infiniteToFiniteWall leftWall) ++ 
-    getTranslatedWallAssets (infiniteToFiniteWall leftWall2) ++ 
-    getTranslatedWallAssets (infiniteToFiniteWall rightWall) ++ 
-    getTranslatedWallAssets (infiniteToFiniteWall rightWall2) ++ 
-    foldr (\w acc -> (getTranslatedWallAssets w) <> acc) [] walls
+    let wallSide = if left then "left_rock" else "right_rock"
+    imgs <- sequence [loadPNG ("./assets/walls/" ++ wallSide ++ show n ++ ".png") | n <- [0..3 :: Int]]
+    return (Seq.fromList imgs)

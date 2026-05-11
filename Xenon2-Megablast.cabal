@@ -29,12 +29,14 @@ library
       GameState.Enemy
       GameState.Game
       GameState.Player
+      GameState.Rock
+      GameState.Wall
       Graphics.Assets
       Graphics.Background
+      Invariant
       Keyboard
       Objects.Hitbox
       Objects.Objects
-      Objects.Wall
       RandomGenerations
       Utils
   other-modules:
