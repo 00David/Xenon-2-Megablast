@@ -1,7 +1,15 @@
 module GameSetup (module GameSetup) where
-    
+
+import Damageable
 import Graphics.Gloss
 import Data.Sequence
+
+-- ============================================================
+-- ===================== COMMON TYPES =========================
+-- ============================================================
+
+type PlayerId = Int
+type Score = Int
 
 -- ============================================================
 -- ======================= GAME EVENTS ========================
@@ -35,10 +43,10 @@ widthVirus = 65
 heightVirus :: Float
 heightVirus = 64
 
-widthEnemyAssets :: Seq Float
-widthEnemyAssets = fromList [8, 8]
-heightEnemyAssets :: Seq Float
-heightEnemyAssets = fromList [8, 8]
+widthEnemyShotAssets :: Seq Float
+widthEnemyShotAssets = fromList [8, 8]
+heightEnemyShotAssets :: Seq Float
+heightEnemyShotAssets = fromList [8, 8]
 
 nbEnemyShotAssets :: Int
 nbEnemyShotAssets = 2
@@ -53,10 +61,10 @@ widthPlayer = 110
 heightPlayer :: Float
 heightPlayer = 76
 
-widthPlayerAssets :: Seq Float
-widthPlayerAssets = fromList [8]
-heightPlayerAssets :: Seq Float
-heightPlayerAssets = fromList [8]
+widthPlayerShotAssets :: Seq Float
+widthPlayerShotAssets = fromList [8]
+heightPlayerShotAssets :: Seq Float
+heightPlayerShotAssets = fromList [8]
 
 nbPlayerShotAssets :: Int
 nbPlayerShotAssets = 1
@@ -77,7 +85,8 @@ cell = index heightRockAssets 0
 -- ========================= SPEEDS ===========================
 -- ============================================================
 
-screenDefaultSpeed :: Float
+type ScreenScrollingSpeed = Float
+screenDefaultSpeed :: ScreenScrollingSpeed
 screenDefaultSpeed = 3
 
 playerDefaultSpeed :: Float
@@ -88,6 +97,16 @@ backgroundDefaultScrollingSpeed = 100 -- pixels / second
 
 framesPerSecond :: Int
 framesPerSecond = 60
+
+-- ============================================================
+-- ======================== ENEMIES ===========================
+-- ============================================================
+
+enemyDefaultHealth :: Health
+enemyDefaultHealth = 1
+
+enemyDefaultCollisionDamage :: Damage
+enemyDefaultCollisionDamage = 10
 
 -- ============================================================
 -- ========================= SHOTS ============================

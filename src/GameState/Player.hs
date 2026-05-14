@@ -5,6 +5,7 @@ import Graphics.Gloss (Picture(Translate, Rotate))
 
 import qualified Data.Sequence as Seq
 
+import Damageable
 import GameSetup
 import GameState.Projectile
 import Graphics.Assets
@@ -16,13 +17,14 @@ import Objects.Objects
 -- ========================= PLAYER ===========================
 -- ============================================================
 
-type PlayerId = Int -- player id, 1 or 2
+--type PlayerId = Int -- player id, 1 or 2
 type Lifes = Int -- player remaining lifes, inside of [1, 3]
-type PlayerHealth = Int -- health for the current player life, inside of ]0, 100]
-type Score = Int -- player current score, positive
+--type Health = Int -- health for the current player life, inside of ]0, 100]
+--type Score = Int -- player current score, positive
 type ExplosionAnim = Int -- player current explosion animation sprite, inside of [1, 7]
 type ShootDelay = Int -- player shooting delay (in number of frames), >= 0
-data Player = AliveP Object PlayerId Lifes PlayerHealth Score ShootDelay
+
+data Player = AliveP Object PlayerId Lifes Health Score ShootDelay
     | DeadP Object PlayerId Score ExplosionAnim
     deriving (Eq, Show)
 
@@ -40,7 +42,7 @@ initPlayerObject x y dir speed =
         speed
     )
 
-initAlivePlayer :: Object -> PlayerId -> Lifes -> PlayerHealth -> Score -> ShootDelay -> Player
+initAlivePlayer :: Object -> PlayerId -> Lifes -> Health -> Score -> ShootDelay -> Player
 initAlivePlayer po pId lifes health score shootD
     | lifes < 0 || lifes > 3 = error "number of lifes outside of [0, 3], must be inside it"
     | health < 0 || health > 100 = error "current life health outside of [0, 100], must be inside it"
@@ -66,7 +68,7 @@ playerLifes :: Player -> Lifes
 playerLifes (AliveP _ _ l _ _ _) = l
 playerLifes (DeadP _ _ _ _) = 0
 
-playerHealth :: Player -> PlayerHealth
+playerHealth :: Player -> Health
 playerHealth (AliveP _ _ _ h _ _) = h
 playerHealth (DeadP _ _ _ _) = 0
 
@@ -81,6 +83,34 @@ playerExplAnimation (DeadP _ _ _ anim) = anim
 playerShootDelay:: Player -> ShootDelay
 playerShootDelay (AliveP _ _ _ _ _ shootD) = shootD
 playerShootDelay (DeadP _ _ _ _) = 100000
+
+addScore :: Score -> Player -> Player
+addScore s (AliveP obj pId lifes health score shootD) = initAlivePlayer obj pId lifes health (score+s) shootD
+addScore s (DeadP obj pId score anim) = initDeadPlayer obj pId (score+s) anim
+
+prop_pre_addScore :: Score -> Player -> Bool
+prop_pre_addScore s _ = s >= 0
+
+prop_post_addScore :: Score -> Player -> Bool
+prop_post_addScore s p =
+    let p' = addScore s p
+    in case (p, p') of
+        (AliveP obj1 pId1 lifes1 health1 score1 shootD1,
+         AliveP obj2 pId2 lifes2 health2 score2 shootD2) ->
+                obj1 == obj2
+            && pId1 == pId2
+            && lifes1 == lifes2
+            && health1 == health2
+            && score2 == score1 + s
+            && shootD1 == shootD2
+
+        (DeadP obj1 pId1 score1 anim1,
+         DeadP obj2 pId2 score2 anim2) ->
+                obj1 == obj2
+            && pId1 == pId2
+            && score2 == score1 + s
+            && anim1 == anim2
+        _ -> False
 
 -- Indicates if a player is dead. Otherwise he is alive.
 isPlayerDead :: Player -> Bool
@@ -140,11 +170,13 @@ playerHitbox cx cy =
             ]
 
 playerShot :: Player-> Maybe Projectile
-playerShot (AliveP po _ _ _ _ _) =
+playerShot (AliveP po pId _ _ _ _) =
     let (x,y) = centerHitbox (objectHitbox po)
         dir = initDirection 0 1
         s = initObjectSpeed playerDefaultShotSpeed
-    in Just (initPlayerShot dir s x (y+50) 0 playerDefaultShotDamage playerDefaultShotRange 0)
+        assetIndex = 0
+        projO = (playerShotObject dir s x (y+50) assetIndex)
+    in Just (initPlayerShot projO assetIndex playerDefaultShotDamage playerDefaultShotRange 0 pId)
 playerShot (DeadP _ _ _ _) = Nothing
 
 -- ============================================================
@@ -162,8 +194,10 @@ instance Invariant Player where
 instance Renderable Player where
     getTranslatedAssets :: GameAssets -> Player -> [Picture]
     getTranslatedAssets ga player = 
-        getTranslatedBoosterAssets ga player ++
-        getTranslatedPlayerAssets ga player
+        if not (isPlayerDead player) then
+            getTranslatedBoosterAssets ga player ++
+            getTranslatedPlayerAssets ga player
+        else []
 
 -- Returns a list of translated player assets.
 getTranslatedPlayerAssets :: GameAssets -> Player -> [Picture]
@@ -223,9 +257,30 @@ instance Collidable Player where
             objs2 = getObjects other
         in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) objs1
 
-    willCollide :: Collidable b => Player -> b -> Float -> Bool  
+    willCollide :: Collidable b => Player -> b -> ScreenScrollingSpeed -> Bool  
     willCollide player other screenSpeed =
         let objs1 = getObjects player
             objs2 = getObjects other
             movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
         in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
+
+-- ============================================================
+-- ==================== PLAYER DAMAGEABLE ======================
+-- ============================================================
+
+instance Damageable Player where
+    currentHealth :: Player -> Maybe Health
+    currentHealth (AliveP _ _ _ h _ _) = Just h
+    currentHealth (DeadP _ _ _ _) = Nothing
+
+    takeDamage :: Damage -> Player -> Maybe Player
+    takeDamage d (AliveP obj pId lifes health score shootD) =
+        let newHealth = health-d
+        in
+            if newHealth > 0 then Just (initAlivePlayer obj pId lifes newHealth score shootD)
+            else 
+                let newLifes = lifes-1
+                in 
+                    if newLifes > 0 then Just (initAlivePlayer obj pId newLifes 100 score shootD) -- health restored at 100
+                    else Just (initDeadPlayer obj pId score 1) -- dead
+    takeDamage _ dead@(DeadP _ _ _ _) = Just dead

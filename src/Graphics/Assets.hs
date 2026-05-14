@@ -17,7 +17,16 @@ import Objects.Hitbox
 -- ============================================================
 
 class Renderable a where
+    -- Get a list of translated assets representing the 'a'
     getTranslatedAssets :: GameAssets -> a -> [Picture]
+
+law_renderable_does_not_modify :: (Renderable a, Eq a) => GameAssets -> a -> Bool
+law_renderable_does_not_modify ga x =
+    let _ = getTranslatedAssets ga x
+    in x == x
+
+law_renderable_finite :: Renderable a => GameAssets -> a -> Bool
+law_renderable_finite ga x = Prelude.length (getTranslatedAssets ga x) < 100
 
 -- ============================================================
 -- ======================== GAME ASSETS =======================

@@ -78,7 +78,7 @@ handleEventsIO ev game@(Game kbd (StartMenu option) _ _ counter) = do
                     _ -> return game{keyboard = newKBD}
 
 -- In game
-handleEventsIO ev game@(Game kbd (InGame (InGameInfos p1 p2 enemies walls projectiles)) _ _ _) = do
+handleEventsIO ev game@(Game kbd (InGame (InGameInfos ss p1 p2 enemies walls projectiles)) _ _ _) = do
     -- trace ("event received: " <> show ev) 
     let newKBD = (handleKeyEvent ev kbd) -- keyboard update
 
@@ -92,7 +92,7 @@ handleEventsIO ev game@(Game kbd (InGame (InGameInfos p1 p2 enemies walls projec
                     Nothing -> return game{keyboard = newKBD}
                     Just shot -> 
                         let newProjectiles = shot : projectiles
-                            newIgi = initInGameInfos p1 p2 enemies walls newProjectiles
+                            newIgi = initInGameInfos ss p1 p2 enemies walls newProjectiles
                         in return game{keyboard = newKBD, state = (InGame newIgi)}
                 else return game{keyboard = newKBD}
 
@@ -103,7 +103,7 @@ updateIO :: Float -> Game -> IO Game
 updateIO _ game@(Game _ (StartMenu _) _ _ _) = return game 
 
 -- In game
-updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos _ _ _ _ _)) _ bgnd counter) = do 
+updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos _ _ _ _ _ _)) _ bgnd counter) = do 
     let 
         -- Background update
         newBgnd = updateBackground deltaTime bgnd
@@ -118,9 +118,9 @@ updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos _ _ _ _ _)) _ bgnd co
     if length (gameEnemies ig2) == 0 then trace "VIRUS DETRUIT !" $ do
         (newVX, newVY) <- generateVirusCoordinates
         let newVo = initStaticEnemyRectangleObject newVX newVY
-            newV = initEnemy newVo 1
+            newV = initEnemy newVo enemyDefaultHealth enemyDefaultCollisionDamage 47
             newEnemies = [newV]
-        return game{state = (initInGame(initInGameInfos (gamePlayer1 ig2) (gamePlayer2 ig2) newEnemies (gameWalls ig2) (gameProjectiles ig2))), 
+        return game{state = (initInGame(initInGameInfos (gameScreenSpeed ig2) (gamePlayer1 ig2) (gamePlayer2 ig2) newEnemies (gameWalls ig2) (gameProjectiles ig2))), 
             background = newBgnd, frameCounter = newCounter}
     else
         return game{state = (InGame ig2), background = newBgnd, frameCounter = newCounter}

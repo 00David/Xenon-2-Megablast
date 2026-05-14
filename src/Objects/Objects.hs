@@ -1,6 +1,9 @@
 {-# LANGUAGE InstanceSigs #-}
 module Objects.Objects (module Objects.Objects) where
 
+import Test.QuickCheck
+
+import GameSetup
 import Invariant
 import Objects.Hitbox
 
@@ -16,7 +19,17 @@ class Collidable a where
     collision :: Collidable b => a -> b -> Bool
 
     -- Detects if there is a collision after moving a. Float is the scrolling speed
-    willCollide :: Collidable b => a -> b -> Float -> Bool
+    willCollide :: Collidable b => a -> b -> ScreenScrollingSpeed -> Bool
+
+law_collidable_reflexive :: Collidable a => a -> Bool
+law_collidable_reflexive x = collision x x
+
+law_collidable_symmetric :: (Collidable a, Collidable b) => a -> b -> Bool
+law_collidable_symmetric x y = collision x y == collision y x
+
+law_collidable_will_collide :: Collidable a => Collidable b => a -> b -> ScreenScrollingSpeed -> Property
+law_collidable_will_collide x y s =
+    willCollide x y s ==> any (\o -> collision (moveObject o s) y) (getObjects x)
 
 -- ============================================================
 -- ====================== OBJECTS =============================
@@ -84,7 +97,7 @@ objectSpeed (StaticO _) = ObjectSpeed 0
 -- Moves an object
 -- For a movable object it is according to its direction and speed
 -- For a static object it is according to the second given argument, being the screen scrolling speed
-moveObject :: Object -> Float -> Object
+moveObject :: Object -> ScreenScrollingSpeed -> Object
 moveObject (MovableO h (Direction dirx diry) os@(ObjectSpeed s)) _ = 
     let dx = (fromIntegral dirx)*s
         dy = (fromIntegral diry)*s
@@ -92,10 +105,10 @@ moveObject (MovableO h (Direction dirx diry) os@(ObjectSpeed s)) _ =
 moveObject (StaticO h) screenS = 
     (initStaticObject (moveHitbox h (0, -screenS)))
 
-prop_pre_moveObject :: Object -> Float -> Bool
+prop_pre_moveObject :: Object -> ScreenScrollingSpeed -> Bool
 prop_pre_moveObject _ screenS = screenS >= 0
 
-prop_post_moveObject :: Object -> Float -> Bool
+prop_post_moveObject :: Object -> ScreenScrollingSpeed -> Bool
 prop_post_moveObject (MovableO h d@(Direction dirx diry) os@(ObjectSpeed s)) screenS = 
     let dx = (fromIntegral dirx)*s
         dy = (fromIntegral diry)*s
@@ -127,7 +140,7 @@ instance Collidable Object where
         let objs2 = getObjects other
         in any (\o2 -> collisionObject obj o2) objs2
 
-    willCollide :: Collidable b => Object -> b -> Float -> Bool  
+    willCollide :: Collidable b => Object -> b -> ScreenScrollingSpeed -> Bool  
     willCollide obj other screenSpeed =
         let objs2 = getObjects other
             movedObj = moveObject obj screenSpeed

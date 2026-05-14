@@ -84,7 +84,7 @@ instance Collidable Rock where
             objs2 = getObjects other
         in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) objs1
 
-    willCollide :: Collidable b => Rock -> b -> Float -> Bool  
+    willCollide :: Collidable b => Rock -> b -> ScreenScrollingSpeed -> Bool  
     willCollide rock other screenSpeed =
         let objs1 = getObjects rock
             objs2 = getObjects other

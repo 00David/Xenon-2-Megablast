@@ -257,7 +257,7 @@ instance (Collidable a) => Collidable (FiniteWall a) where
             objs2 = getObjects other
         in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) objs1
 
-    willCollide :: Collidable b => FiniteWall a -> b -> Float -> Bool  
+    willCollide :: Collidable b => FiniteWall a -> b -> ScreenScrollingSpeed -> Bool  
     willCollide wall other screenSpeed =
         let objs1 = getObjects wall
             objs2 = getObjects other
@@ -274,7 +274,7 @@ instance (Collidable a) => Collidable (InfiniteWall a) where
             objs2 = getObjects other
         in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) objs1
 
-    willCollide :: Collidable b => InfiniteWall a -> b -> Float -> Bool  
+    willCollide :: Collidable b => InfiniteWall a -> b -> ScreenScrollingSpeed -> Bool  
     willCollide wall other screenSpeed =
         let objs1 = getObjects wall
             objs2 = getObjects other
@@ -296,7 +296,7 @@ instance Collidable GameWalls where
             objs2 = getObjects other
         in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) objs1
 
-    willCollide :: Collidable b => GameWalls -> b -> Float -> Bool
+    willCollide :: Collidable b => GameWalls -> b -> ScreenScrollingSpeed -> Bool
     willCollide gw other screenSpeed =
         let objs1 = getObjects gw
             objs2 = getObjects other
