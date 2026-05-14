@@ -13,22 +13,23 @@ import Objects.Objects
 -- ========================= ENNEMY ===========================
 -- ============================================================
 
+type EnemyHealth = Int -- enemy remaining health, > 0
+
 data Enemy = Enemy {
     enemyObject :: Object, -- graphical representation of the enemy
-    enemyHealth :: Int -- enemy remaining health, > 0
+    enemyHealth :: EnemyHealth
 } deriving (Eq, Show)
 
 prop_inv_enemy :: Enemy -> Bool
 prop_inv_enemy (Enemy eo health) = prop_inv_object eo && health > 0
 
--- ?
 initStaticEnemyRectangleObject :: Float -> Float -> Object
 initStaticEnemyRectangleObject x y = 
     (initStaticObject 
         (initHitboxRectangle (x-(widthVirus / 2)) (y-(heightVirus / 2)) widthVirus heightVirus)
     )
 
-initEnemy :: Object -> Int -> Enemy
+initEnemy :: Object -> EnemyHealth -> Enemy
 initEnemy eo health
     | health <= 0 = error "ennemy health must be strictly positive"
     | otherwise = Enemy eo health

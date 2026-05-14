@@ -7,6 +7,7 @@ import Graphics.Gloss (Picture(Translate))
 import System.Random
 
 import qualified Data.Sequence as Seq
+import Data.Foldable (toList)
 
 import GameSetup
 import GameState.Rock
@@ -14,7 +15,6 @@ import Graphics.Assets
 import Invariant
 import Objects.Hitbox
 import Objects.Objects
-import Data.Foldable (toList)
 
 -- ============================================================
 -- ====================== WALLS ===============================
@@ -43,10 +43,6 @@ prop_inv_finiteWall (FiniteWall l) = length l > 0
     && all prop_inv l
     && prop_wall_allCollideWithNext l
 
--- Filters a finite wall
-filterWall :: forall a. (a -> Bool) -> FiniteWall a -> FiniteWall a
-filterWall f (FiniteWall elems) = FiniteWall (filter f elems)
-
 initFiniteWall :: (Invariant a, Collidable a) => [a] -> FiniteWall a
 initFiniteWall l
     | length l == 0 = error "a wall must have at least one collidable"
@@ -54,37 +50,40 @@ initFiniteWall l
     | not (prop_wall_allCollideWithNext l) = error "collidable must collide with the next in the list"
     | otherwise = FiniteWall l
 
+-- Filters a finite wall
+filterWall :: (a -> Bool) -> FiniteWall a -> FiniteWall a
+filterWall f (FiniteWall elems) = FiniteWall (filter f elems)
+
 -- an infinite wall is a non empty list of static objects
 newtype InfiniteWall a = InfiniteWall [a]
-    deriving (Eq, Show)
+
+instance Eq a => Eq (InfiniteWall a) where
+    (==) :: InfiniteWall a -> InfiniteWall a -> Bool
+    (InfiniteWall xs) == (InfiniteWall ys) = (take nbTakeInfiniteWalls xs) == (take nbTakeInfiniteWalls ys)
+
+instance Show a => Show (InfiniteWall a) where
+    show :: InfiniteWall a -> String
+    show (InfiniteWall xs) ="InfiniteWall " ++ show (take nbTakeInfiniteWalls xs) ++ "..."
 
 instance Functor InfiniteWall where
     fmap :: (a -> b) -> InfiniteWall a -> InfiniteWall b
     fmap f (InfiniteWall list) = InfiniteWall (fmap f list)
 
+nbTakeInfiniteWalls :: Int
+nbTakeInfiniteWalls = 20
+
 prop_inv_infiniteWall :: Invariant a => InfiniteWall a -> Bool
 prop_inv_infiniteWall (InfiniteWall l) =  -- only a sublist is checked
-    let subList = take 100 l
+    let subList = take nbTakeInfiniteWalls l
     in length subList > 0 && all prop_inv subList
 
--- Partially filters an infinite wall : it will apply a filter only on a prefix of it
-partialFilterWall :: forall a. (a -> Bool) -> InfiniteWall a -> InfiniteWall a
-partialFilterWall f (InfiniteWall elems) = InfiniteWall (aux 0 elems)
-    where
-        aux :: Int -> [a] -> [a]
-        aux _ [] = error "wall must be infinite"
-        aux i l@(x:xs)
-            | i == nbTakeInfiniteWalls = l
-            | f x = x:(aux (i+1) xs)
-            | otherwise = aux (i+1) xs
-
--- Initializes an infinite wall of rocks
+-- Initializes an infinite wall of ROCKS
 initInfiniteWall :: Bool -> Bool -> StdGen -> InfiniteWall Rock
 initInfiniteWall foreground left gen =
     let 
         -- Maximum width among all rock assets.
         -- Used to compute how far walls may go outside the screen.
-        maxW = maximum (toList widthRocks)
+        maxW = maximum (toList widthRockAssets)
         -- Maximum allowed horizontal overflow outside the screen.
         overflow = maxW * 0.6
 
@@ -94,16 +93,21 @@ initInfiniteWall foreground left gen =
             if left
                 then (leftXScreenBound - overflow, leftXScreenBound)
                 else (rightXScreenBound - maxW, rightXScreenBound - maxW + overflow)
-        
-         -- Vertical spacing between wall segments (rocks).
-        cell = Seq.index heightRocks 0
 
         -- Starting Y coordinate.
         -- Background walls are vertically offset by half a cell.
         baseY = if foreground then bottomYScreenBound else bottomYScreenBound+(cell/2)
 
         -- Infinite sequence of Y coordinates for wall segments (rocks).
-        ys = map (\i -> baseY + fromIntegral i * cell) ([0..] :: [Int])
+        -- The first nbTakeInfiniteWalls values are spaced normally,
+        -- then all following values stay constant.
+        ys =
+            let firstYs =
+                    map (\i -> baseY + fromIntegral i * cell)
+                        ([0 .. nbTakeInfiniteWalls - 1] :: [Int])
+
+                lastY = last firstYs
+            in firstYs ++ repeat lastY
 
         --  Random rock asset indexes
         randomWalls = randomRs (0, nbRockAssets - 1) gen
@@ -126,8 +130,8 @@ initInfiniteWall foreground left gen =
         -- Sencond argument : a pair (number of the rock asset index, X position)
         makeWallObject :: Float -> (Int, Float) -> Rock
         makeWallObject y (numRock, x) = 
-            let width = (Seq.index widthRocks numRock)
-                height = (Seq.index heightRocks numRock)
+            let width = (Seq.index widthRockAssets numRock)
+                height = (Seq.index heightRockAssets numRock)
                 x2 = if left then x else 
                     case numRock of -- Offset on right screen side if rocks of width < 90
                         0 -> x
@@ -138,8 +142,26 @@ initInfiniteWall foreground left gen =
                 obj = initStaticObject (initHitboxRectangle x2 y width height)
             in initRock obj numRock left
 
-nbTakeInfiniteWalls :: Int
-nbTakeInfiniteWalls = 20
+-- Partially maps an infinite wall : it will apply a function only on a prefix of it
+partialMapWall :: forall a. (a -> a) -> InfiniteWall a -> InfiniteWall a
+partialMapWall f (InfiniteWall elems) = InfiniteWall (aux 0 elems)
+    where
+        aux :: Int -> [a] -> [a]
+        aux _ [] = error "wall must be infinite"
+        aux i l@(x:xs)
+            | i == nbTakeInfiniteWalls = l
+            | otherwise = (f x):(aux (i+1) xs)
+
+-- Partially filters an infinite wall : it will apply a filter only on a prefix of it
+partialFilterWall :: forall a. (a -> Bool) -> InfiniteWall a -> InfiniteWall a
+partialFilterWall f (InfiniteWall elems) = InfiniteWall (aux 0 elems)
+    where
+        aux :: Int -> [a] -> [a]
+        aux _ [] = error "wall must be infinite"
+        aux i l@(x:xs)
+            | i == nbTakeInfiniteWalls = l
+            | (f x) = x:(aux (i+1) xs)
+            | otherwise = aux (i+1) xs
 
 -- Converts an infinite wall to a finite wall, by only keeping a sub-part of it.
 infiniteToFiniteWall :: InfiniteWall a -> FiniteWall a
@@ -159,6 +181,15 @@ prop_inv_gameWalls (GameWalls leftWall leftWall2 rightWall rightWall2 walls) =
     prop_inv_infiniteWall rightWall && prop_inv_infiniteWall rightWall2 &&
     foldr (\w acc -> prop_inv_finiteWall w && acc) True walls
 
+initGameWalls :: InfiniteWall Rock -> InfiniteWall Rock -> InfiniteWall Rock -> InfiniteWall Rock -> [FiniteWall Rock] -> GameWalls
+initGameWalls left1 left2 right1 right2 walls
+    | not (prop_inv_infiniteWall left1) = error "left wall 1 does not respect infinite invariant"
+    | not (prop_inv_infiniteWall left2) = error "left wall 2 does not respect infinite invariant"
+    | not (prop_inv_infiniteWall right1) = error "right wall 1 does not respect infinite invariant"
+    | not (prop_inv_infiniteWall right2) = error "right wall 2 does not respect infinite invariant"
+    | any (not . prop_inv_finiteWall) walls = error "a wall does not respect finite invariant"
+    | otherwise = GameWalls left1 left2 right1 right2 walls
+
 startInitGameWalls :: StdGen -> GameWalls
 startInitGameWalls gen =
     -- Split the given generator in independant ones for avoiding weird patterns in next generated random values
@@ -170,15 +201,6 @@ startInitGameWalls gen =
         right1 = initInfiniteWall True False gen3
         right2 = initInfiniteWall False False gen4
     in (GameWalls left1 left2 right1 right2 [])
-
-initGameWalls :: InfiniteWall Rock -> InfiniteWall Rock -> InfiniteWall Rock -> InfiniteWall Rock -> [FiniteWall Rock] -> GameWalls
-initGameWalls left1 left2 right1 right2 walls
-    | not (prop_inv_infiniteWall left1) = error "left wall 1 does not respect infinite invariant"
-    | not (prop_inv_infiniteWall left2) = error "left wall 2 does not respect infinite invariant"
-    | not (prop_inv_infiniteWall right1) = error "right wall 1 does not respect infinite invariant"
-    | not (prop_inv_infiniteWall right2) = error "right wall 2 does not respect infinite invariant"
-    | any (not . prop_inv_finiteWall) walls = error "a wall does not respect finite invariant"
-    | otherwise = GameWalls left1 left2 right1 right2 walls
 
 -- ============================================================
 -- ==================== WALLS INVARIANT =======================

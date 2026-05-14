@@ -29,6 +29,7 @@ library
       GameState.Enemy
       GameState.Game
       GameState.Player
+      GameState.Projectile
       GameState.Rock
       GameState.Wall
       Graphics.Assets

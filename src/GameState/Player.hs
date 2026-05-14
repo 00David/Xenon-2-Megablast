@@ -5,6 +5,8 @@ import Graphics.Gloss (Picture(Translate, Rotate))
 
 import qualified Data.Sequence as Seq
 
+import GameSetup
+import GameState.Projectile
 import Graphics.Assets
 import Invariant
 import Objects.Hitbox
@@ -14,29 +16,21 @@ import Objects.Objects
 -- ========================= PLAYER ===========================
 -- ============================================================
 
-data Player = AliveP Object Int Int Int Int
-    | DeadP Object Int Int Int
+type PlayerId = Int -- player id, 1 or 2
+type Lifes = Int -- player remaining lifes, inside of [1, 3]
+type PlayerHealth = Int -- health for the current player life, inside of ]0, 100]
+type Score = Int -- player current score, positive
+type ExplosionAnim = Int -- player current explosion animation sprite, inside of [1, 7]
+type ShootDelay = Int -- player shooting delay (in number of frames), >= 0
+data Player = AliveP Object PlayerId Lifes PlayerHealth Score ShootDelay
+    | DeadP Object PlayerId Score ExplosionAnim
     deriving (Eq, Show)
 
-{-- 
-When Alive, it has :
-- a spatial representation of the player
-- player id, 1 or 2
-- player remaining lifes, inside of [1, 3]
-- health for the current player life, inside of ]0, 100]
-- player current score, positive
-Whe Dead, it has :
-- a spatial representation of the player
-- player id, 1 or 2
-- player current score, positive
-- player current explosion animation, inside of [1, 7]
---}
-
 prop_inv_player :: Player -> Bool
-prop_inv_player (AliveP po pId lifes health score) = prop_inv_object po && (pId == 1 || pId == 2) && lifes >= 1 && lifes <= 3
-    && health >= 1 && health <= 100 && score >= 0
-prop_inv_player (DeadP po pId score anim) = prop_inv_object po && (pId == 1 || pId == 2) && score >= 0
-    && anim >= 1 && anim <= 7
+prop_inv_player p@(AliveP po pId lifes health score shootD) = prop_inv_object po && (pId == 1 || pId == 2) && lifes >= 1 && lifes <= 3
+    && health >= 1 && health <= 100 && score >= 0 && insideScreenPlayer p && shootD >= 0
+prop_inv_player p@(DeadP po pId score anim) = prop_inv_object po && (pId == 1 || pId == 2) && score >= 0
+    && anim >= 1 && anim <= 7 && insideScreenPlayer p
 
 initPlayerObject :: Float -> Float -> Direction -> ObjectSpeed -> Object
 initPlayerObject x y dir speed = 
@@ -46,47 +40,62 @@ initPlayerObject x y dir speed =
         speed
     )
 
-initAlivePlayer :: Object -> Int -> Int -> Int -> Int -> Player
-initAlivePlayer po pId lifes health score
+initAlivePlayer :: Object -> PlayerId -> Lifes -> PlayerHealth -> Score -> ShootDelay -> Player
+initAlivePlayer po pId lifes health score shootD
     | lifes < 0 || lifes > 3 = error "number of lifes outside of [0, 3], must be inside it"
     | health < 0 || health > 100 = error "current life health outside of [0, 100], must be inside it"
     | score < 0 = error "score must be positive"
-    | otherwise = AliveP po pId lifes health score
+    | shootD < 0 = error "shoot delay must be positive"
+    | otherwise = AliveP po pId lifes health score shootD
 
-initDeadPlayer :: Object -> Int -> Int -> Int -> Player
+initDeadPlayer :: Object -> PlayerId -> Score -> ExplosionAnim -> Player
 initDeadPlayer po pId score anim
     | score < 0 = error "score must be positive"
     | anim < 1 || anim > 7 = error "animation number must be inside of [1, 7]" 
     | otherwise = DeadP po pId score anim
 
 playerObject :: Player -> Object
-playerObject (AliveP o _ _ _ _) = o
+playerObject (AliveP o _ _ _ _ _) = o
 playerObject (DeadP o _ _ _) = o
 
-playerId :: Player -> Int
-playerId (AliveP _ pId _ _ _) = pId
+playerId :: Player -> PlayerId
+playerId (AliveP _ pId _ _ _ _) = pId
 playerId (DeadP _ pId _ _) = pId
 
-playerLifes :: Player -> Int
-playerLifes (AliveP _ _ l _ _) = l
+playerLifes :: Player -> Lifes
+playerLifes (AliveP _ _ l _ _ _) = l
 playerLifes (DeadP _ _ _ _) = 0
 
-playerHealth :: Player -> Int
-playerHealth (AliveP _ _ _ h _) = h
+playerHealth :: Player -> PlayerHealth
+playerHealth (AliveP _ _ _ h _ _) = h
 playerHealth (DeadP _ _ _ _) = 0
 
-playerScore :: Player -> Int
-playerScore (AliveP _ _ _ _ s) = s
+playerScore :: Player -> Score
+playerScore (AliveP _ _ _ _ s _) = s
 playerScore (DeadP _ _ s _) = s
 
-playerExplAnimation :: Player -> Int
-playerExplAnimation (AliveP _ _ _ _ _) = 0
+playerExplAnimation :: Player -> ExplosionAnim
+playerExplAnimation (AliveP _ _ _ _ _ _) = 0
 playerExplAnimation (DeadP _ _ _ anim) = anim
 
--- Indicates if a player is dead
+playerShootDelay:: Player -> ShootDelay
+playerShootDelay (AliveP _ _ _ _ _ shootD) = shootD
+playerShootDelay (DeadP _ _ _ _) = 100000
+
+-- Indicates if a player is dead. Otherwise he is alive.
 isPlayerDead :: Player -> Bool
-isPlayerDead (AliveP _ _ _ _ _) = False
+isPlayerDead (AliveP _ _ _ _ _ _) = False
 isPlayerDead (DeadP _ _ _ _) = True
+
+-- Indicates if a player is inside the screen (by considering the bottom bar as the bottom limit of the screen)
+insideScreenPlayer :: Player -> Bool
+insideScreenPlayer p = 
+    let leftBound = leftXScreenBound + (widthPlayer / 2)
+        rightBound = rightXScreenBound - (widthPlayer / 2)
+        topBound = topYScreenBound - (heightPlayer / 2)
+        bottomBound = bottomYScreenWithBarBound + (heightPlayer / 2)
+        (x,y) = centerHitbox (objectHitbox (playerObject p))
+    in  x >= leftBound && x <= rightBound && y >= bottomBound && y <= topBound
 
 -- Creates the player composite hitbox, with given center coordinates
 playerHitbox :: Float -> Float -> Hitbox
@@ -129,6 +138,14 @@ playerHitbox cx cy =
             , initHitboxRectangle leftThrusterX leftThrusterY leftThrusterWidth leftThrusterHeight
             , initHitboxRectangle rightThrusterX rightThrusterY rightThrusterWidth rightThrusterHeight
             ]
+
+playerShot :: Player-> Maybe Projectile
+playerShot (AliveP po _ _ _ _ _) =
+    let (x,y) = centerHitbox (objectHitbox po)
+        dir = initDirection 0 1
+        s = initObjectSpeed playerDefaultShotSpeed
+    in Just (initPlayerShot dir s x (y+50) 0 playerDefaultShotDamage playerDefaultShotRange 0)
+playerShot (DeadP _ _ _ _) = Nothing
 
 -- ============================================================
 -- =================== PLAYER INVARIANT =======================

@@ -1,6 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 module Objects.Hitbox (module Objects.Hitbox) where
 
+import GameSetup
 import Invariant
 import Utils
 
@@ -8,9 +9,18 @@ import Utils
 -- ====================== OBJECT HITBOXES =====================
 -- ============================================================
 
-data Hitbox = Circle Float Float Float -- x y center coordinates + radius. Radius >= 0.
-    | Rectangle Float Float Float Float  -- x y bottom-left coordinates + width + heigth. Width > 0 and heigth > 0.
-    | Hitboxes Float Float [Hitbox] -- x y center coordinates + a list of hitboxes. length > 0. The center must be part of at least 1 hitbox.
+type XCenter = Float
+type YCenter = Float
+type Radius = Float -- >= 0
+
+type XBottomLeft = Float
+type YBottomLeft = Float
+type Width = Float -- > 0
+type Heigth = Float -- > 0
+
+data Hitbox = Circle XCenter YCenter Radius 
+    | Rectangle XBottomLeft YBottomLeft Width Heigth
+    | Hitboxes XCenter YCenter [Hitbox] -- x y center coordinates + length list of hitboxes > 0. The center must be part of at least 1 hitbox.
     deriving (Eq, Show)
 
 instance Invariant Hitbox where
@@ -25,6 +35,22 @@ prop_inv_hitbox (Hitboxes x y l) =
     && all prop_inv_hitbox l
     && any (partOfHitbox x y) l
 
+initHitboxCircle :: XCenter -> YCenter -> Radius -> Hitbox
+initHitboxCircle x y r = if r < 0 then error "radius cannot be strictly negative" else (Circle x y r)
+
+initHitboxRectangle :: XBottomLeft -> YBottomLeft -> Width -> Heigth -> Hitbox
+initHitboxRectangle x y w h
+    | w <= 0 = error "width cannot be negative or null"
+    | h <= 0 = error "heigth cannot be negative or null"
+    | otherwise = (Rectangle x y w h)
+
+initHitboxes :: XCenter -> YCenter -> [Hitbox]-> Hitbox
+initHitboxes x y l 
+    | length l == 0 = error "must have at least 1 hitbox"
+    | not (all prop_inv_hitbox l) = error "each hitbox must verify its invariant"
+    | not (any (partOfHitbox x y) l) = error "(x,y) must be part of at least 1 contained hitbox"
+    | otherwise = (Hitboxes x y l)
+
 -- Indicates if the given (x,y) coordinates are part of the given hitbox 
 partOfHitbox :: Float -> Float -> Hitbox -> Bool
 partOfHitbox x y (Circle xh yh r) = ((x - xh)*(x - xh)) + ((y - yh)*(y - yh)) <= r*r
@@ -35,24 +61,8 @@ partOfHitbox x y (Rectangle xh yh w h) =
     y <= yh + h
 partOfHitbox x y (Hitboxes _ _ ll) = any (partOfHitbox x y) ll
 
-initHitboxCircle :: Float -> Float -> Float -> Hitbox
-initHitboxCircle x y r = if r < 0 then error "radius cannot be strictly negative" else (Circle x y r)
-
-initHitboxRectangle :: Float -> Float -> Float -> Float -> Hitbox
-initHitboxRectangle x y w h
-    | w <= 0 = error "width cannot be negative or null"
-    | h <= 0 = error "heigth cannot be negative or null"
-    | otherwise = (Rectangle x y w h)
-
-initHitboxes :: Float -> Float -> [Hitbox]-> Hitbox
-initHitboxes x y l 
-    | length l == 0 = error "must have at least 1 hitbox"
-    | not (all prop_inv_hitbox l) = error "each hitbox must verify its invariant"
-    | not (any (partOfHitbox x y) l) = error "(x,y) must be part of at least 1 contained hitbox"
-    | otherwise = (Hitboxes x y l)
-
 -- Gives the (x,y) center of the Hitbox
-centerHitbox :: Hitbox -> (Float, Float)
+centerHitbox :: Hitbox -> (XCenter, YCenter)
 centerHitbox (Circle x y _) = (x,y)
 centerHitbox (Rectangle x y w h) = (x + (w / 2), y + (h / 2))
 centerHitbox (Hitboxes x y _) = (x,y)
@@ -112,3 +122,20 @@ prop_post_moveHitbox hit@(Hitboxes x y l) d@(dx,dy) =
     case (moveHitbox hit d) of
         (Hitboxes x2 y2 l2) -> x2 == x+dx && y2 == y+dy && foldr (\h acc -> prop_post_moveHitbox h (dx,dy) && acc) True l && length l == length l2
         _ -> False
+
+-- Indicates if a hitbox is inside the screen
+insideScreenHitbox :: Hitbox -> Bool
+insideScreenHitbox (Circle x y r) =
+    let leftBound = leftXScreenBound + r
+        rightBound = rightXScreenBound - r
+        topBound = topYScreenBound - r
+        bottomBound = bottomYScreenBound + r
+    in x >= leftBound && x <= rightBound && y >= bottomBound && y <= topBound
+insideScreenHitbox (Rectangle xBL yBL w h) =  
+    let rightX = xBL + w
+        topY = yBL + h
+    in xBL >= leftXScreenBound 
+        && rightX <= rightXScreenBound
+        && yBL >= bottomYScreenBound
+        && topY <= topYScreenBound
+insideScreenHitbox (Hitboxes _ _ hitboxes) =  all insideScreenHitbox hitboxes

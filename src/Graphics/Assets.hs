@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 module Graphics.Assets (module Graphics.Assets) where
 
-import Graphics.Gloss ( Picture(Translate, Color, Rotate), rectangleWire, circleSolid, red, blue )
+import Graphics.Gloss ( Picture(Translate, Color), rectangleWire, circleSolid, red, blue )
 import Graphics.Gloss.Juicy
 
 import Data.Char
@@ -47,7 +47,10 @@ data GameAssets = GameAssets {
     p2HealthBarPics :: HealtBarAssets,
     -- walls
     leftWallPics :: Seq Picture,
-    rightWallPics :: Seq Picture
+    rightWallPics :: Seq Picture,
+    -- shots
+    playerShotPics :: Seq Picture,
+    enemyShotPics :: Seq Picture
 } deriving Show
 
 initGameAssets :: IO GameAssets
@@ -55,11 +58,7 @@ initGameAssets = do
     p1 <- loadPNG "./assets/spaceship/spaceship_norm.png"
     p2 <- loadPNG "./assets/spaceship/spaceship_norm.png"
     -- spaceship boosters are loaded into an array
-    boosters <- sequence 
-        [ loadPNG "./assets/spaceship/booster_left.png"
-        , loadPNG "./assets/spaceship/booster_right.png"
-        , loadPNG "./assets/spaceship/booster_top_left.png"
-        , loadPNG "./assets/spaceship/booster_top_right.png"]
+    boosters <- initBoosterAssets
     v <- loadBMP "./assets/virus.bmp"
     bottomLeft <- loadPNG "./assets/bottom_score/bottom_left_bar.png"
     bottomBar <- loadPNG "./assets/bottom_score/bottom_center_bar/bottom_bar.png"
@@ -69,8 +68,11 @@ initGameAssets = do
     p2Health <- initHealthP2Assets
     leftWalls <- initWallAssets True
     rightWalls <- initWallAssets False
-    return $ GameAssets p1 p2 (Seq.fromList boosters) v 
-        bottomLeft bottomBar bottomRight ds p1Health p2Health leftWalls rightWalls
+    pShots <- initPlayerShotAssets
+    eShots <- initEnemyShotAssets
+    return $ GameAssets p1 p2 boosters v 
+        bottomLeft bottomBar bottomRight ds p1Health p2Health leftWalls rightWalls 
+        pShots eShots
 
 -- Translates a hitbox into its visible borders, for debug purpose
 translateHitbox :: Hitbox -> [Picture]
@@ -265,6 +267,19 @@ prop_pre_getDigitAsset _ i
     | otherwise = True
 
 -- ============================================================
+-- ==================== BOOSTER ASSETS ========================
+-- ============================================================
+
+initBoosterAssets :: IO (Seq Picture)
+initBoosterAssets = do
+    boosters <- sequence 
+        [ loadPNG "./assets/spaceship/booster_left.png"
+        , loadPNG "./assets/spaceship/booster_right.png"
+        , loadPNG "./assets/spaceship/booster_top_left.png"
+        , loadPNG "./assets/spaceship/booster_top_right.png"]
+    return (Seq.fromList boosters)
+
+-- ============================================================
 -- ====================== WALL ASSETS =========================
 -- ============================================================
 
@@ -273,3 +288,17 @@ initWallAssets left = do
     let wallSide = if left then "left_rock" else "right_rock"
     imgs <- sequence [loadPNG ("./assets/walls/" ++ wallSide ++ show n ++ ".png") | n <- [0..3 :: Int]]
     return (Seq.fromList imgs)
+
+-- ============================================================
+-- ====================== SHOT ASSETS =========================
+-- ============================================================
+
+initPlayerShotAssets :: IO (Seq Picture)
+initPlayerShotAssets = do
+    pShots <- sequence [loadPNG ("./assets/shots/playerShot" ++ show n ++ ".png") | n <- [0..(nbPlayerShotAssets-1) :: Int]]
+    return (Seq.fromList pShots)
+
+initEnemyShotAssets :: IO (Seq Picture)
+initEnemyShotAssets = do
+    eShots <- sequence [loadPNG ("./assets/shots/enemyShot" ++ show n ++ ".png") | n <- [0..(nbEnemyShotAssets-1) :: Int]]
+    return (Seq.fromList eShots)

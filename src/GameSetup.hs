@@ -4,6 +4,13 @@ import Graphics.Gloss
 import Data.Sequence
 
 -- ============================================================
+-- ======================= GAME EVENTS ========================
+-- ============================================================
+
+maxFramesToConsider :: Int
+maxFramesToConsider = framesPerSecond*10
+
+-- ============================================================
 -- ========================= ASSETS ===========================
 -- ============================================================
 
@@ -28,6 +35,14 @@ widthVirus = 65
 heightVirus :: Float
 heightVirus = 64
 
+widthEnemyAssets :: Seq Float
+widthEnemyAssets = fromList [8, 8]
+heightEnemyAssets :: Seq Float
+heightEnemyAssets = fromList [8, 8]
+
+nbEnemyShotAssets :: Int
+nbEnemyShotAssets = 2
+
 loadVirus :: IO Picture
 loadVirus = do
     virus <- loadBMP "./assets/virus.bmp"
@@ -38,13 +53,25 @@ widthPlayer = 110
 heightPlayer :: Float
 heightPlayer = 76
 
-widthRocks :: Seq Float
-widthRocks = fromList [90, 90, 87, 84]
-heightRocks :: Seq Float
-heightRocks = fromList [42, 42, 44, 42]
+widthPlayerAssets :: Seq Float
+widthPlayerAssets = fromList [8]
+heightPlayerAssets :: Seq Float
+heightPlayerAssets = fromList [8]
+
+nbPlayerShotAssets :: Int
+nbPlayerShotAssets = 1
+
+widthRockAssets :: Seq Float
+widthRockAssets = fromList [90, 90, 87, 84]
+heightRockAssets :: Seq Float
+heightRockAssets = fromList [42, 42, 44, 42]
 
 nbRockAssets :: Int
 nbRockAssets = 4
+
+-- Vertical spacing between wall segments (rocks).
+cell :: Float
+cell = index heightRockAssets 0
 
 -- ============================================================
 -- ========================= SPEEDS ===========================
@@ -61,3 +88,19 @@ backgroundDefaultScrollingSpeed = 100 -- pixels / second
 
 framesPerSecond :: Int
 framesPerSecond = 60
+
+-- ============================================================
+-- ========================= SHOTS ============================
+-- ============================================================
+
+playerDefaultShootDelay :: Int
+playerDefaultShootDelay = 60 -- in frames
+
+playerDefaultShotSpeed :: Float
+playerDefaultShotSpeed = 6
+
+playerDefaultShotDamage :: Int
+playerDefaultShotDamage = 1
+
+playerDefaultShotRange :: Float
+playerDefaultShotRange = 500
