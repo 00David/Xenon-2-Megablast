@@ -2,7 +2,7 @@
 {-# LANGUAGE InstanceSigs #-}
 module GameState.Wall (module GameState.Wall) where
 
-import Graphics.Gloss (Picture(Translate))
+import Graphics.Gloss (Picture)
 
 import System.Random
 
@@ -12,12 +12,13 @@ import Data.Foldable (toList)
 import GameSetup
 import GameState.Rock
 import Graphics.Assets
-import Invariant
 import Objects.Hitbox
 import Objects.Objects
+import Typeclasses.Invariant
+import Typeclasses.Movable
 
 -- ============================================================
--- ====================== WALLS ===============================
+-- ====================== FINITE WALLS ========================
 -- ============================================================
 
 prop_wall_allCollideWithNext :: Collidable a => [a] -> Bool
@@ -53,6 +54,18 @@ initFiniteWall l
 -- Filters a finite wall
 filterWall :: (a -> Bool) -> FiniteWall a -> FiniteWall a
 filterWall f (FiniteWall elems) = FiniteWall (filter f elems)
+
+-- Moves a finite wall
+moveFiniteWall :: (Movable a) => FiniteWall a -> ScreenScrollingSpeed -> FiniteWall a
+moveFiniteWall w ss = (fmap (flip move ss) w)
+
+-- Indicates if an entire finite wall is inside the screen
+insideScreenFiniteWall :: (Movable a) => FiniteWall a -> Bool
+insideScreenFiniteWall w = (all insideScreen w)
+
+-- ============================================================
+-- ===================== INFINITE WALLS =======================
+-- ============================================================
 
 -- an infinite wall is a non empty list of static objects
 newtype InfiniteWall a = InfiniteWall [a]
@@ -96,14 +109,14 @@ initInfiniteWall foreground left gen =
 
         -- Starting Y coordinate.
         -- Background walls are vertically offset by half a cell.
-        baseY = if foreground then bottomYScreenBound else bottomYScreenBound+(cell/2)
+        baseY = if foreground then bottomYScreenBound else bottomYScreenBound+(rockCell/2)
 
         -- Infinite sequence of Y coordinates for wall segments (rocks).
         -- The first nbTakeInfiniteWalls values are spaced normally,
         -- then all following values stay constant.
         ys =
             let firstYs =
-                    map (\i -> baseY + fromIntegral i * cell)
+                    map (\i -> baseY + fromIntegral i * rockCell)
                         ([0 .. nbTakeInfiniteWalls - 1] :: [Int])
 
                 lastY = last firstYs
@@ -140,7 +153,8 @@ initInfiniteWall foreground left gen =
                         3 -> x+6
                         i -> error (show i++" out of bounds")
                 obj = initStaticObject (initHitboxRectangle x2 y width height)
-            in initRock obj numRock left
+            in 
+                initRock obj numRock left foreground
 
 -- Partially maps an infinite wall : it will apply a function only on a prefix of it
 partialMapWall :: forall a. (a -> a) -> InfiniteWall a -> InfiniteWall a
@@ -166,6 +180,18 @@ partialFilterWall f (InfiniteWall elems) = InfiniteWall (aux 0 elems)
 -- Converts an infinite wall to a finite wall, by only keeping a sub-part of it.
 infiniteToFiniteWall :: InfiniteWall a -> FiniteWall a
 infiniteToFiniteWall (InfiniteWall wallObjects) = (FiniteWall (take nbTakeInfiniteWalls wallObjects))
+
+-- Moves partially an infinite wall
+partialMoveInfiniteWall :: (Movable a) => InfiniteWall a -> ScreenScrollingSpeed -> InfiniteWall a
+partialMoveInfiniteWall w ss = (partialMapWall (flip move ss) w)
+
+-- Indicates if a prefix of an infinite wall is inside the screen
+partialInsideScreenInfiniteWall :: (Movable a) => InfiniteWall a -> Bool
+partialInsideScreenInfiniteWall (InfiniteWall wallObjects) = (all insideScreen (take nbTakeInfiniteWalls wallObjects))
+
+-- ============================================================
+-- ======================= GAME WALLS =========================
+-- ============================================================
 
 data GameWalls = GameWalls {
     gameLeftWall :: InfiniteWall Rock,
@@ -202,6 +228,27 @@ startInitGameWalls gen =
         right2 = initInfiniteWall False False gen4
     in (GameWalls left1 left2 right1 right2 [])
 
+-- Moves game walls
+moveGameWalls :: GameWalls -> ScreenScrollingSpeed -> GameWalls
+moveGameWalls (GameWalls left1 left2 right1 right2 walls) ss =
+    let 
+        newLeft1 = move left1 ss
+        newLeft2 = move left2 ss
+        newRight1 = move right1 ss
+        newRight2 = move right2 ss
+        newWalls = (fmap (\w -> move w ss) walls)
+    in 
+        (initGameWalls newLeft1 newLeft2 newRight1 newRight2 newWalls)
+
+-- Indicates if game walls are inside of the screen
+insideScreenGameWalls :: GameWalls -> Bool
+insideScreenGameWalls (GameWalls left1 left2 right1 right2 walls) =
+    insideScreen left1
+    && insideScreen left2
+    && insideScreen right1
+    && insideScreen right2
+    && all (all insideScreen) walls
+
 -- ============================================================
 -- ==================== WALLS INVARIANT =======================
 -- ============================================================
@@ -217,6 +264,31 @@ instance (Invariant a) => Invariant (InfiniteWall a) where
 instance Invariant GameWalls where
     prop_inv :: GameWalls -> Bool
     prop_inv = prop_inv_gameWalls
+
+-- ============================================================
+-- ==================== WALLS MOVABLE =======================
+-- ============================================================
+
+instance (Movable a) => Movable (FiniteWall a) where
+    move :: (FiniteWall a) -> ScreenScrollingSpeed -> (FiniteWall a)
+    move = moveFiniteWall
+
+    insideScreen :: (FiniteWall a) -> Bool
+    insideScreen = insideScreenFiniteWall
+
+instance (Movable a) => Movable (InfiniteWall a) where
+    move :: (InfiniteWall a) -> ScreenScrollingSpeed -> (InfiniteWall a)
+    move = partialMoveInfiniteWall
+
+    insideScreen :: (InfiniteWall a) -> Bool
+    insideScreen = partialInsideScreenInfiniteWall
+
+instance Movable GameWalls where
+    move :: GameWalls -> ScreenScrollingSpeed -> GameWalls
+    move = moveGameWalls
+
+    insideScreen :: GameWalls -> Bool
+    insideScreen = insideScreenGameWalls
 
 -- ============================================================
 -- =================== WALLS RENDERABLE =======================

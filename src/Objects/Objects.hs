@@ -4,14 +4,15 @@ module Objects.Objects (module Objects.Objects) where
 import Test.QuickCheck
 
 import GameSetup
-import Invariant
 import Objects.Hitbox
+import Typeclasses.Invariant
+import Typeclasses.Movable
 
 -- ============================================================
 -- ================= COLLIDABLE TYPECLASS =====================
 -- ============================================================
 
-class Collidable a where
+class (Movable a) => Collidable a where
     -- Get a list of objects representing a (in general only one)
     getObjects :: a -> [Object]
 
@@ -38,10 +39,6 @@ law_collidable_will_collide x y s =
 data Direction = Direction Int Int -- direction components must be part of {-1, 0, 1}
     deriving (Eq, Show)
 
-instance Invariant Direction where
-    prop_inv :: Direction -> Bool
-    prop_inv = prop_inv_direction 
-
 prop_inv_direction :: Direction -> Bool
 prop_inv_direction (Direction x y) = -1 <= x && x <= 1 && -1 <= y && y <= 1
 
@@ -54,10 +51,6 @@ initDirection x y
 newtype ObjectSpeed = ObjectSpeed Float -- speed >= 0
     deriving (Eq, Show)
 
-instance Invariant ObjectSpeed where
-    prop_inv :: ObjectSpeed -> Bool
-    prop_inv = prop_inv_objectSpeed 
-
 prop_inv_objectSpeed :: ObjectSpeed -> Bool 
 prop_inv_objectSpeed (ObjectSpeed s) = s >= 0
 
@@ -67,10 +60,6 @@ initObjectSpeed s = if s < 0 then error "speed cannot be strictly negative" else
 data Object = MovableO Hitbox Direction ObjectSpeed
     | StaticO Hitbox
     deriving (Eq, Show)
-
-instance Invariant Object where
-    prop_inv :: Object -> Bool
-    prop_inv = prop_inv_object 
 
 prop_inv_object :: Object -> Bool 
 prop_inv_object (MovableO h d s) = prop_inv_hitbox h && prop_inv_direction d && prop_inv_objectSpeed s
@@ -120,12 +109,52 @@ prop_post_moveObject (StaticO h) screenS =
         (StaticO _) -> (prop_post_moveHitbox h (0, -screenS))
         _ -> False
 
+-- Idicates if an object is inside the screen
+insideScreenObject :: Object -> Bool
+insideScreenObject (MovableO h _ _)  = insideScreenHitbox h
+insideScreenObject (StaticO h)  = insideScreenHitbox h
+
 -- Detects if there is a collision between 2 objects (thanks to their hitboxes)
 collisionObject :: Object -> Object -> Bool
 collisionObject o1 o2 = collisionHitbox (objectHitbox o1) (objectHitbox o2)
 
 prop_commutativity_collisionObject :: Object -> Object -> Bool
 prop_commutativity_collisionObject o1 o2 = (collisionObject o1 o2 == collisionObject o2 o1)
+
+-- ============================================================
+-- ================== DIRECTION INVARIANT =====================
+-- ============================================================
+
+instance Invariant Direction where
+    prop_inv :: Direction -> Bool
+    prop_inv = prop_inv_direction
+
+-- ============================================================
+-- ================== OBJECTSPEED INVARIANT ===================
+-- ============================================================
+
+instance Invariant ObjectSpeed where
+    prop_inv :: ObjectSpeed -> Bool
+    prop_inv = prop_inv_objectSpeed
+
+-- ============================================================
+-- =================== OBJECTS INVARIANT ======================
+-- ============================================================
+
+instance Invariant Object where
+    prop_inv :: Object -> Bool
+    prop_inv = prop_inv_object
+
+-- ============================================================
+-- ===================== OBJECTS MOVABLE ======================
+-- ============================================================
+
+instance Movable Object where
+    move :: Object -> ScreenScrollingSpeed -> Object
+    move = moveObject
+
+    insideScreen :: Object -> Bool
+    insideScreen = insideScreenObject
 
 -- ============================================================
 -- ================== OBJECTS COLLIDABLE ======================

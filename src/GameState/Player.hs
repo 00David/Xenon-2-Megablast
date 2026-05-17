@@ -5,13 +5,14 @@ import Graphics.Gloss (Picture(Translate, Rotate))
 
 import qualified Data.Sequence as Seq
 
-import Damageable
 import GameSetup
 import GameState.Projectile
 import Graphics.Assets
-import Invariant
 import Objects.Hitbox
 import Objects.Objects
+import Typeclasses.Damageable
+import Typeclasses.Invariant
+import Typeclasses.Movable
 
 -- ============================================================
 -- ========================= PLAYER ===========================
@@ -22,7 +23,7 @@ type Lifes = Int -- player remaining lifes, inside of [1, 3]
 --type Health = Int -- health for the current player life, inside of ]0, 100]
 --type Score = Int -- player current score, positive
 type ExplosionAnim = Int -- player current explosion animation sprite, inside of [1, 7]
-type ShootDelay = Int -- player shooting delay (in number of frames), >= 0
+--type ShootDelay = Int -- player shooting delay (in number of frames/second), >= 1, reseted at 1
 
 data Player = AliveP Object PlayerId Lifes Health Score ShootDelay
     | DeadP Object PlayerId Score ExplosionAnim
@@ -30,7 +31,7 @@ data Player = AliveP Object PlayerId Lifes Health Score ShootDelay
 
 prop_inv_player :: Player -> Bool
 prop_inv_player p@(AliveP po pId lifes health score shootD) = prop_inv_object po && (pId == 1 || pId == 2) && lifes >= 1 && lifes <= 3
-    && health >= 1 && health <= 100 && score >= 0 && insideScreenPlayer p && shootD >= 0
+    && health >= 1 && health <= 100 && score >= 0 && insideScreenPlayer p && shootD >= 1
 prop_inv_player p@(DeadP po pId score anim) = prop_inv_object po && (pId == 1 || pId == 2) && score >= 0
     && anim >= 1 && anim <= 7 && insideScreenPlayer p
 
@@ -47,7 +48,7 @@ initAlivePlayer po pId lifes health score shootD
     | lifes < 0 || lifes > 3 = error "number of lifes outside of [0, 3], must be inside it"
     | health < 0 || health > 100 = error "current life health outside of [0, 100], must be inside it"
     | score < 0 = error "score must be positive"
-    | shootD < 0 = error "shoot delay must be positive"
+    | shootD < 1 = error "shoot delay must be >= 1"
     | otherwise = AliveP po pId lifes health score shootD
 
 initDeadPlayer :: Object -> PlayerId -> Score -> ExplosionAnim -> Player
@@ -84,6 +85,20 @@ playerShootDelay:: Player -> ShootDelay
 playerShootDelay (AliveP _ _ _ _ _ shootD) = shootD
 playerShootDelay (DeadP _ _ _ _) = 100000
 
+updatePlayerObject :: Player -> Object -> Player
+updatePlayerObject (AliveP _ pId lifes health score shootD) newPo = initAlivePlayer newPo pId lifes health score shootD
+updatePlayerObject (DeadP _ pId score anim) newPo = initDeadPlayer newPo pId score anim
+
+prop_post_updatePlayerObject :: Player -> Object -> Bool
+prop_post_updatePlayerObject p newPo =
+    let newP = updatePlayerObject p newPo
+    in case (p, newP) of
+        ((AliveP _ pId lifes health score shootD), (AliveP obj' pId' lifes' health' score' shootD')) ->
+            obj' == newPo && pId' == pId && lifes' == lifes && health' == health && score' == score && shootD' == shootD
+        ((DeadP _ pId score anim), (DeadP obj' pId' score' anim')) ->
+            obj' == newPo && pId' == pId && score' == score && anim' == anim
+        (_,_)-> False
+
 addScore :: Score -> Player -> Player
 addScore s (AliveP obj pId lifes health score shootD) = initAlivePlayer obj pId lifes health (score+s) shootD
 addScore s (DeadP obj pId score anim) = initDeadPlayer obj pId (score+s) anim
@@ -116,6 +131,60 @@ prop_post_addScore s p =
 isPlayerDead :: Player -> Bool
 isPlayerDead (AliveP _ _ _ _ _ _) = False
 isPlayerDead (DeadP _ _ _ _) = True
+
+-- Moves a player, with X and Y indepedant directions : if one of those directions leads outside of the screen, 
+-- the movement in the concerned direction will be independantly canceled.
+-- Don't take into account walls, just screen borders with the bottom bar too.
+movePlayer :: Player -> ScreenScrollingSpeed -> Player
+movePlayer p@(DeadP _ _ _ _) _ = p
+movePlayer p@(AliveP po pId lifes health score shootDelay) ss =
+    let 
+        (Direction dirX dirY) = objectDirection po
+        (ObjectSpeed s) = objectSpeed po
+        (x, y) = centerHitbox (objectHitbox po)
+        
+        -- Calculate potential new positions after movement
+        dx = (fromIntegral dirX) * s
+        dy = (fromIntegral dirY) * s
+        newX = x + dx
+        newY = y + dy
+        
+        -- Screen bounds
+        leftBound = leftXScreenBound + (widthPlayer / 2)
+        rightBound = rightXScreenBound - (widthPlayer / 2)
+        topBound = topYScreenBound - (heightPlayer / 2)
+        bottomBound = bottomYScreenWithBarBound + (heightPlayer / 2)
+        
+        -- Check each direction independently
+        xInsideAfter = newX >= leftBound && newX <= rightBound
+        yInsideAfter = newY >= bottomBound && newY <= topBound
+        
+        -- Keep only valid directions
+        finalDirX = if xInsideAfter then dirX else 0
+        finalDirY = if yInsideAfter then dirY else 0
+        
+    in if (finalDirX /= 0 || finalDirY /= 0)
+        then
+            let 
+                finalDirection = initDirection finalDirX finalDirY
+                newPo = initMovableObject (objectHitbox po) finalDirection (objectSpeed po)
+                movedPo = moveObject newPo ss  -- UN SEUL APPEL à moveObject, pas de récursion
+            in initAlivePlayer movedPo pId lifes health score shootDelay
+        else p
+
+prop_pre_movePlayer :: Player -> ScreenScrollingSpeed -> Bool
+prop_pre_movePlayer p _ = insideScreenPlayer p
+
+prop_post_movePlayer :: Player -> ScreenScrollingSpeed -> Bool
+prop_post_movePlayer p@(DeadP _ _ _ _) ss = 
+    let newP = movePlayer p ss
+    in p == newP
+prop_post_movePlayer p@(AliveP po pId lifes health score shootD) ss = 
+    let newP = movePlayer p ss
+    in case newP of
+        newPP@(AliveP po' pId' lifes' health' score' shootD') -> 
+            insideScreenPlayer newPP && po' == po && pId' == pId && lifes' == lifes && health' == health && score' == score && shootD' == shootD
+        _ -> False
 
 -- Indicates if a player is inside the screen (by considering the bottom bar as the bottom limit of the screen)
 insideScreenPlayer :: Player -> Bool
@@ -176,7 +245,7 @@ playerShot (AliveP po pId _ _ _ _) =
         s = initObjectSpeed playerDefaultShotSpeed
         assetIndex = 0
         projO = (playerShotObject dir s x (y+50) assetIndex)
-    in Just (initPlayerShot projO assetIndex playerDefaultShotDamage playerDefaultShotRange 0 pId)
+    in Just (initPlayerShot projO assetIndex playerDefaultShotDamage pId)
 playerShot (DeadP _ _ _ _) = Nothing
 
 -- ============================================================
@@ -242,6 +311,17 @@ prop_post_getTranslatedBoosterAssets :: GameAssets -> Player -> Bool
 prop_post_getTranslatedBoosterAssets ga player = 
     let boosterPics = getTranslatedBoosterAssets ga player
     in (length boosterPics) == 0 || (length boosterPics) == 2 || (length boosterPics) == 3
+
+-- ============================================================
+-- ===================== PLAYER MOVABLE =======================
+-- ============================================================
+
+instance Movable Player where
+    move :: Player -> ScreenScrollingSpeed -> Player
+    move = movePlayer
+
+    insideScreen :: Player -> Bool
+    insideScreen = insideScreenPlayer
 
 -- ============================================================
 -- =================== PLAYER COLLIDABLE ======================

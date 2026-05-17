@@ -1,8 +1,9 @@
 module GameSetup (module GameSetup) where
 
-import Damageable
 import Graphics.Gloss
 import Data.Sequence
+
+import Typeclasses.Damageable
 
 -- ============================================================
 -- ===================== COMMON TYPES =========================
@@ -10,13 +11,18 @@ import Data.Sequence
 
 type PlayerId = Int
 type Score = Int
+type ShootDelay = Int
+type ScreenScrollingSpeed = Float
 
 -- ============================================================
 -- ======================= GAME EVENTS ========================
 -- ============================================================
 
 maxFramesToConsider :: Int
-maxFramesToConsider = framesPerSecond*10
+maxFramesToConsider = framesPerSecond*1000000
+
+maxEnemies :: Int
+maxEnemies = 20
 
 -- ============================================================
 -- ========================= ASSETS ===========================
@@ -44,9 +50,9 @@ heightVirus :: Float
 heightVirus = 64
 
 widthEnemyShotAssets :: Seq Float
-widthEnemyShotAssets = fromList [8, 8]
+widthEnemyShotAssets = fromList [32, 32]
 heightEnemyShotAssets :: Seq Float
-heightEnemyShotAssets = fromList [8, 8]
+heightEnemyShotAssets = fromList [32, 32]
 
 nbEnemyShotAssets :: Int
 nbEnemyShotAssets = 2
@@ -62,9 +68,9 @@ heightPlayer :: Float
 heightPlayer = 76
 
 widthPlayerShotAssets :: Seq Float
-widthPlayerShotAssets = fromList [8]
+widthPlayerShotAssets = fromList [16]
 heightPlayerShotAssets :: Seq Float
-heightPlayerShotAssets = fromList [8]
+heightPlayerShotAssets = fromList [16]
 
 nbPlayerShotAssets :: Int
 nbPlayerShotAssets = 1
@@ -78,16 +84,15 @@ nbRockAssets :: Int
 nbRockAssets = 4
 
 -- Vertical spacing between wall segments (rocks).
-cell :: Float
-cell = index heightRockAssets 0
+rockCell :: Float
+rockCell = index heightRockAssets 0
 
 -- ============================================================
 -- ========================= SPEEDS ===========================
 -- ============================================================
 
-type ScreenScrollingSpeed = Float
 screenDefaultSpeed :: ScreenScrollingSpeed
-screenDefaultSpeed = 3
+screenDefaultSpeed = 3 -- pixels / frame
 
 playerDefaultSpeed :: Float
 playerDefaultSpeed = 300 -- pixels / second
@@ -98,28 +103,61 @@ backgroundDefaultScrollingSpeed = 100 -- pixels / second
 framesPerSecond :: Int
 framesPerSecond = 60
 
+leftRightShootEnemySpeed :: Float
+leftRightShootEnemySpeed = 2 -- pixels / frame
+
+loopEnemySpeed :: Float
+loopEnemySpeed = 6 -- pixels / frame
+
 -- ============================================================
 -- ======================== ENEMIES ===========================
 -- ============================================================
 
-enemyDefaultHealth :: Health
-enemyDefaultHealth = 1
+noMoveButBiteEnemyHealth :: Health
+noMoveButBiteEnemyHealth = 1
 
-enemyDefaultCollisionDamage :: Damage
-enemyDefaultCollisionDamage = 10
+leftRightShootEnemyHealth :: Health
+leftRightShootEnemyHealth = 1
+
+loopEnemyHealth :: Health
+loopEnemyHealth = 3
+
+noMoveButBiteEnemyScore :: Score
+noMoveButBiteEnemyScore = 10
+
+leftRightShootEnemyScore :: Score
+leftRightShootEnemyScore = 25
+
+loopEnemyScore :: Score
+loopEnemyScore = 50
+
+noMoveButBiteEnemyCollisionDamage :: Damage
+noMoveButBiteEnemyCollisionDamage = 20
+
+leftRightShootEnemyCollisionDamage :: Damage
+leftRightShootEnemyCollisionDamage = 10
+
+loopEnemyCollisionDamage :: Damage
+loopEnemyCollisionDamage = 10
+
+leftRightShootEnemyShootDelay :: ShootDelay
+leftRightShootEnemyShootDelay = 60 -- in frames / second
+
+leftRightShootEnemyShotSpeed :: Float
+leftRightShootEnemyShotSpeed = 10
+
+leftRightShootEnemyShotDamage :: Damage
+leftRightShootEnemyShotDamage = 10
 
 -- ============================================================
 -- ========================= SHOTS ============================
 -- ============================================================
 
-playerDefaultShootDelay :: Int
-playerDefaultShootDelay = 60 -- in frames
+playerDefaultShootDelay :: ShootDelay
+playerDefaultShootDelay = 60 -- in frames / second
 
 playerDefaultShotSpeed :: Float
 playerDefaultShotSpeed = 6
 
-playerDefaultShotDamage :: Int
+playerDefaultShotDamage :: Damage
 playerDefaultShotDamage = 1
-
-playerDefaultShotRange :: Float
-playerDefaultShotRange = 500

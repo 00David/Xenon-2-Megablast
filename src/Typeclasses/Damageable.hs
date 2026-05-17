@@ -1,4 +1,4 @@
-module Damageable (module Damageable) where
+module Typeclasses.Damageable (module Typeclasses.Damageable) where
 
 type Damage = Int
 type Health = Int

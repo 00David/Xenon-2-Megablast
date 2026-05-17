@@ -7,9 +7,10 @@ import qualified Data.Sequence as Seq
 
 import GameSetup
 import Graphics.Assets
-import Invariant
 import Objects.Hitbox
 import Objects.Objects
+import Typeclasses.Invariant
+import Typeclasses.Movable
 
 -- ============================================================
 -- ================= ROCK (part of walls) ====================
@@ -17,33 +18,50 @@ import Objects.Objects
 
 type RockAsset = Int -- 0, 1, 2 or 3
 
-data Rock = Rock {
-    rockObject :: Object,
-    rockAsset :: RockAsset,
-    rockLeftSide :: Bool
-} deriving (Show, Eq)
+data Rock = 
+    LeftRock {
+        rockObject :: Object,
+        rockAsset :: RockAsset,
+        rockForward :: Bool
+    } 
+    | RightRock {
+        rockObject :: Object,
+        rockAsset :: RockAsset,
+        rockForward :: Bool
+    } deriving (Show, Eq)
 
 prop_inv_rock :: Rock -> Bool
-prop_inv_rock (Rock obj iType _) = 
-    case obj of
-    (MovableO _ _ _) -> False
-    (StaticO _) -> iType >= 0 && iType <= (nbRockAssets-1)
+prop_inv_rock rock =
+    let obj =  rockObject rock
+        asset = rockAsset rock
+    in case obj of
+        (MovableO _ _ _) -> False
+        (StaticO _) -> asset >= 0 && asset <= (nbRockAssets-1)
 
-initRock :: Object -> RockAsset -> Bool -> Rock
-initRock obj sprite side = 
+initRock :: Object -> RockAsset -> Bool -> Bool -> Rock
+initRock obj asset leftSide forward = 
     case obj of
     (MovableO _ _ _) -> error "a rock cannot be represented by a movable object"
     (StaticO _) -> 
-        if sprite >= 0 && sprite <= (nbRockAssets-1) 
-            then (Rock obj sprite side)
+        if asset >= 0 && asset <= (nbRockAssets-1) 
+            then 
+                if leftSide 
+                    then (LeftRock obj asset forward)
+                    else (RightRock obj asset forward)
             else error "invalid rock type"
 
+-- Moves a rock
+moveRock :: Rock -> ScreenScrollingSpeed -> Rock
+moveRock (LeftRock ro asset frwd) ss = initRock (moveObject ro ss) asset True frwd
+moveRock (RightRock ro asset frwd) ss = initRock (moveObject ro ss) asset False frwd
+
 -- Indicates if a rock is ~ inside the screen ~ : it must not be below a certain y coordinate to be inside
--- The first argument applies a little offset for this y limit if FALSE
-insideScreenRock :: Bool -> Rock -> Bool
-insideScreenRock foreground (Rock obj _ _) = 
-    let (_,y) = centerHitbox (objectHitbox obj)
-        limit = if foreground then (bottomYScreenBound-cell) else (bottomYScreenBound-cell+(cell/2))
+-- If forward, a little offset for this y limit is added
+insideScreenRock :: Rock -> Bool
+insideScreenRock rock = 
+    let obj = rockObject rock
+        (_,y) = centerHitbox (objectHitbox obj)
+        limit = if rockForward rock then (bottomYScreenBound-rockCell) else (bottomYScreenBound-rockCell+(rockCell/2))
     in  y >= limit
 
 -- ============================================================
@@ -62,13 +80,29 @@ instance Renderable Rock where
     getTranslatedAssets :: GameAssets -> Rock -> [Picture]
     getTranslatedAssets ga rock = getTranslatedRockAsset ga rock
 
--- Returns a list of translated enemy assets.
+-- Returns a list of translated rock assets.
 getTranslatedRockAsset :: GameAssets -> Rock -> [Picture]
-getTranslatedRockAsset ga (Rock ro sprite leftSide) = 
-    let rockPic = Seq.index ((if leftSide then leftWallPics else rightWallPics) ga) sprite
+getTranslatedRockAsset ga (LeftRock ro sprite _) = 
+    let rockPic = Seq.index (leftWallPics ga) sprite
         (rx, ry) = centerHitbox (objectHitbox ro)
         h = objectHitbox ro
     in [Translate rx ry rockPic] ++ (translateHitbox h)
+getTranslatedRockAsset ga (RightRock ro sprite _) = 
+    let rockPic = Seq.index (rightWallPics ga) sprite
+        (rx, ry) = centerHitbox (objectHitbox ro)
+        h = objectHitbox ro
+    in [Translate rx ry rockPic] ++ (translateHitbox h)
+
+-- ============================================================
+-- ====================== ROCK MOVABLE ========================
+-- ============================================================
+
+instance Movable Rock where
+    move :: Rock -> ScreenScrollingSpeed -> Rock
+    move = moveRock
+
+    insideScreen :: Rock -> Bool
+    insideScreen = insideScreenRock
 
 -- ============================================================
 -- =================== ROCK COLLIDABLE ======================

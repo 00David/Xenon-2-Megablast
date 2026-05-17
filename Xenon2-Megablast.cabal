@@ -25,7 +25,7 @@ source-repository head
 
 library
   exposed-modules:
-      Damageable
+      EnemySpawns
       GameSetup
       GameState.Enemy
       GameState.Game
@@ -35,11 +35,12 @@ library
       GameState.Wall
       Graphics.Assets
       Graphics.Background
-      Invariant
       Keyboard
       Objects.Hitbox
       Objects.Objects
-      RandomGenerations
+      Typeclasses.Damageable
+      Typeclasses.Invariant
+      Typeclasses.Movable
       Utils
   other-modules:
       Paths_Xenon2_Megablast

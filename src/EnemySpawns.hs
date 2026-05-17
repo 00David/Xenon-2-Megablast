@@ -1,4 +1,4 @@
-module RandomGenerations (module RandomGenerations) where
+module EnemySpawns (module EnemySpawns) where
 
 import GameSetup
 import System.Random

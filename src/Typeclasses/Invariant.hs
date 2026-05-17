@@ -1,4 +1,4 @@
-module Invariant (module Invariant) where
+module Typeclasses.Invariant (module Typeclasses.Invariant) where
 
 import Test.QuickCheck
 

@@ -15,7 +15,7 @@ import GameState.Game
 import GameState.Player
 import Graphics.Assets
 import Graphics.Background
-import RandomGenerations
+import EnemySpawns
 import Keyboard
 
 -- Rendering
@@ -104,26 +104,28 @@ updateIO _ game@(Game _ (StartMenu _) _ _ _) = return game
 
 -- In game
 updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos _ _ _ _ _ _)) _ bgnd counter) = do 
+    gen <- newStdGen
     let 
         -- Background update
         newBgnd = updateBackground deltaTime bgnd
 
         -- In game informations update
-        (_, ig2) = St.runState (updateInGame kbd deltaTime) ig1
+        (_, ig2) = St.runState (updateInGame counter gen kbd deltaTime) ig1
 
         -- Counter update
         newCounter = (counter + 1) `mod` maxFramesToConsider
 
+    return game{state = (InGame ig2), background = newBgnd, frameCounter = newCounter}
+
     -- in case of collision with the virus, moves it elsewhere
-    if length (gameEnemies ig2) == 0 then trace "VIRUS DETRUIT !" $ do
+    {--if length (gameEnemies ig2) == 0 then trace "VIRUS DETRUIT !" $ do
         (newVX, newVY) <- generateVirusCoordinates
-        let newVo = initStaticEnemyRectangleObject newVX newVY
-            newV = initEnemy newVo enemyDefaultHealth enemyDefaultCollisionDamage 47
-            newEnemies = [newV]
+        let newE = (startInitLoopEnemy 0 (topYScreenBound+200) 0)
+            newEnemies = [newE]
         return game{state = (initInGame(initInGameInfos (gameScreenSpeed ig2) (gamePlayer1 ig2) (gamePlayer2 ig2) newEnemies (gameWalls ig2) (gameProjectiles ig2))), 
             background = newBgnd, frameCounter = newCounter}
     else
-        return game{state = (InGame ig2), background = newBgnd, frameCounter = newCounter}
+        return game{state = (InGame ig2), background = newBgnd, frameCounter = newCounter}--}
 
 -- Game loop
 main :: IO ()

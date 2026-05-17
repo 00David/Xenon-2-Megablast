@@ -7,7 +7,7 @@ import Data.Fixed
 
 import Graphics.Assets
 import GameSetup
-import Invariant
+import Typeclasses.Invariant
 
 heightBackgroundPicture:: Float
 heightBackgroundPicture = 1100
@@ -17,14 +17,6 @@ data Background = Background{
     backgroundScrollingSpeed :: Float,
     backgroundY :: Float
 } deriving (Eq, Show)
-
-instance Invariant Background where
-    prop_inv :: Background -> Bool
-    prop_inv = prop_inv_background 
-
-instance Renderable Background where
-    getTranslatedAssets :: GameAssets -> Background -> [Picture]
-    getTranslatedAssets _ bgnd = getTranslatedBackgrounds bgnd
 
 -- Ensures that background pictures always cover entirely screen height, by having y part of [0, heightBackgroundPicture[
 prop_inv_background :: Background -> Bool
@@ -62,3 +54,19 @@ getTranslatedBackgrounds (Background pic _ y) =
     in [Translate 0 (baseY - heightBackgroundPicture) pic 
         , Translate 0 baseY pic
         , Translate 0 (baseY + heightBackgroundPicture) pic]
+
+-- ============================================================
+-- =================== BACKGROUND INVARIANT ===================
+-- ============================================================
+
+instance Invariant Background where
+    prop_inv :: Background -> Bool
+    prop_inv = prop_inv_background 
+
+-- ============================================================
+-- ================== BACKGROUND RENDERABLE ===================
+-- ============================================================
+
+instance Renderable Background where
+    getTranslatedAssets :: GameAssets -> Background -> [Picture]
+    getTranslatedAssets _ bgnd = getTranslatedBackgrounds bgnd

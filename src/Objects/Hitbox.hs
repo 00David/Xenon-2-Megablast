@@ -2,8 +2,8 @@
 module Objects.Hitbox (module Objects.Hitbox) where
 
 import GameSetup
-import Invariant
 import Utils
+import Typeclasses.Invariant
 
 -- ============================================================
 -- ====================== OBJECT HITBOXES =====================
@@ -22,10 +22,6 @@ data Hitbox = Circle XCenter YCenter Radius
     | Rectangle XBottomLeft YBottomLeft Width Heigth
     | Hitboxes XCenter YCenter [Hitbox] -- x y center coordinates + length list of hitboxes > 0. The center must be part of at least 1 hitbox.
     deriving (Eq, Show)
-
-instance Invariant Hitbox where
-    prop_inv :: Hitbox -> Bool
-    prop_inv = prop_inv_hitbox 
 
 prop_inv_hitbox :: Hitbox -> Bool
 prop_inv_hitbox (Circle _ _ r) = r >= 0 -- if r == 0 : it is a point
@@ -123,7 +119,7 @@ prop_post_moveHitbox hit@(Hitboxes x y l) d@(dx,dy) =
         (Hitboxes x2 y2 l2) -> x2 == x+dx && y2 == y+dy && foldr (\h acc -> prop_post_moveHitbox h (dx,dy) && acc) True l && length l == length l2
         _ -> False
 
--- Indicates if a hitbox is inside the screen
+-- Indicates if a hitbox is exactly inside the screen.
 insideScreenHitbox :: Hitbox -> Bool
 insideScreenHitbox (Circle x y r) =
     let leftBound = leftXScreenBound + r
@@ -138,4 +134,26 @@ insideScreenHitbox (Rectangle xBL yBL w h) =
         && rightX <= rightXScreenBound
         && yBL >= bottomYScreenBound
         && topY <= topYScreenBound
-insideScreenHitbox (Hitboxes _ _ hitboxes) =  all insideScreenHitbox hitboxes
+insideScreenHitbox (Hitboxes _ _ hitboxes) = all insideScreenHitbox hitboxes
+
+-- Indicates if a hitbox is inside the screen or above it. 
+-- Here it considers the Hitbox still inside when partially inside.
+insideScreenOrAboveHitbox :: Hitbox -> Bool
+insideScreenOrAboveHitbox (Circle x y _) =
+    let leftBound = leftXScreenBound
+        rightBound = rightXScreenBound
+        bottomBound = bottomYScreenBound
+    in x >= leftBound && x <= rightBound && y >= bottomBound
+insideScreenOrAboveHitbox (Rectangle xBL yBL w h) =  
+    xBL + w >= leftXScreenBound 
+    && xBL <= rightXScreenBound
+    && yBL + h >= bottomYScreenBound
+insideScreenOrAboveHitbox (Hitboxes _ _ hitboxes) = all insideScreenOrAboveHitbox hitboxes
+
+-- ============================================================
+-- ===================== HITBOX INVARIANT =====================
+-- ============================================================
+
+instance Invariant Hitbox where
+    prop_inv :: Hitbox -> Bool
+    prop_inv = prop_inv_hitbox 

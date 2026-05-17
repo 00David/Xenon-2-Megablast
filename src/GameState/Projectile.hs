@@ -5,12 +5,13 @@ import Graphics.Gloss (Picture(Translate))
 
 import qualified Data.Sequence as Seq
 
-import Damageable
 import GameSetup
 import Graphics.Assets
-import Invariant
 import Objects.Hitbox
 import Objects.Objects
+import Typeclasses.Damageable
+import Typeclasses.Invariant
+import Typeclasses.Movable
 
 -- ============================================================
 -- ====================== PROJECTILE ==========================
@@ -18,24 +19,20 @@ import Objects.Objects
 
 type ProjectileAsset = Int -- 0 for a player shot. 0 or 1 for an enemy shot
 -- type Damage = Int -- shot damage >= 0
-type Range = Float -- shot range > 0
-type DistanceTraveled = Float -- shot distance traveled since creation >= 0
---type PlayerId = Int -- player id, 1 or 2
 
 data Projectile = 
-    PlayerShot Object ProjectileAsset Damage Range DistanceTraveled PlayerId
-    | EnemyShot Object ProjectileAsset Damage Range DistanceTraveled
+    PlayerShot Object ProjectileAsset Damage PlayerId
+    | EnemyShot Object ProjectileAsset Damage
     deriving (Eq, Show)
 
 prop_inv_projectile :: Projectile -> Bool
-prop_inv_projectile (PlayerShot po sI d r dt pId) = prop_inv_object po && sI == 0 && d >= 1
-    && r > 0 && dt >= 0 && (pId == 1 || pId == 2)
-prop_inv_projectile (EnemyShot po sI d r dt) = prop_inv_object po && (sI == 0 || sI == 1) && d >= 1
-    && r > 0 && dt >= 0
+prop_inv_projectile (PlayerShot po sI d pId) = prop_inv_object po && sI == 0 && d >= 1
+    && (pId == 1 || pId == 2)
+prop_inv_projectile (EnemyShot po sI d) = prop_inv_object po && (sI == 0 || sI == 1) && d >= 1
 
 playerShotObject :: Direction -> ObjectSpeed -> Float -> Float -> ProjectileAsset-> Object
 playerShotObject dir os x y asset = 
-    let h = (initHitboxCircle x y (((Seq.index widthPlayerShotAssets asset)+(Seq.index heightPlayerShotAssets asset))/2.0))
+    let h = (initHitboxCircle x y (((Seq.index widthPlayerShotAssets asset)+(Seq.index heightPlayerShotAssets asset))/4.0))
         in (initMovableObject h dir os)
 
 prop_pre_playerShotObject :: Direction -> ObjectSpeed -> Float -> Float -> ProjectileAsset-> Bool
@@ -47,7 +44,7 @@ enemyShotObject :: Direction -> ObjectSpeed -> Float -> Float -> ProjectileAsset
 enemyShotObject dir os x y asset
     | asset == 0 = 
         let r = ((Seq.index widthEnemyShotAssets asset)
-              + (Seq.index heightEnemyShotAssets asset)) / 2.0
+              + (Seq.index heightEnemyShotAssets asset)) / 4.0
             h = initHitboxCircle x y r
         in initMovableObject h dir os
     | asset == 1 =
@@ -64,57 +61,51 @@ prop_pre_enemyShotObject _ _ _ _ asset
     | asset >= 0 && asset <= (nbEnemyShotAssets-1) = True
     | otherwise = False
 
-initPlayerShot :: Object -> ProjectileAsset -> Damage -> Range -> DistanceTraveled -> PlayerId -> Projectile
-initPlayerShot po asset d r dt pId
+initPlayerShot :: Object -> ProjectileAsset -> Damage -> PlayerId -> Projectile
+initPlayerShot po asset d pId
     | not (asset >= 0 && asset <= (nbPlayerShotAssets-1)) = error "invalid asset index"
     | d < 1 = error "damage must be >= 1"
-    | r <= 0 = error "range must be > 0"
-    | dt < 0 = error "distance traveled must be >= 0"
     | not (pId == 1 || pId == 2) = error "invalid player id"
-    | otherwise = PlayerShot po asset d r dt pId
+    | otherwise = PlayerShot po asset d pId
 
-initEnemyShot :: Object -> ProjectileAsset -> Damage -> Range -> DistanceTraveled -> Projectile
-initEnemyShot po asset d r dt
+initEnemyShot :: Object -> ProjectileAsset -> Damage -> Projectile
+initEnemyShot po asset d
     | not (asset >= 0 && asset <= (nbEnemyShotAssets-1)) = error "invalid asset index"
     | d < 1 = error "damage must be >= 1"
-    | r <= 0 = error "range must be > 0"
-    | dt < 0 = error "distance traveled must be >= 0"
-    | otherwise = EnemyShot po asset d r dt
+    | otherwise = EnemyShot po asset d
 
 projectileObject :: Projectile -> Object
-projectileObject (PlayerShot obj _ _ _ _ _) = obj
-projectileObject (EnemyShot obj _ _ _ _) = obj
+projectileObject (PlayerShot obj _ _ _) = obj
+projectileObject (EnemyShot obj _ _) = obj
 
 projectileAsset :: Projectile -> ProjectileAsset
-projectileAsset (PlayerShot _ asset _ _ _ _) = asset
-projectileAsset (EnemyShot _ asset _ _ _) = asset
+projectileAsset (PlayerShot _ asset _ _) = asset
+projectileAsset (EnemyShot _ asset _) = asset
 
 projectileDamage :: Projectile -> Damage
-projectileDamage (PlayerShot _ _ d _ _ _) = d
-projectileDamage (EnemyShot _ _ d _ _) = d
-
-projectileRange :: Projectile -> Range
-projectileRange (PlayerShot _ _ _ r _ _) = r
-projectileRange (EnemyShot _ _ _ r _) = r
-
-projectileDistanceTraveled :: Projectile -> DistanceTraveled
-projectileDistanceTraveled (PlayerShot _ _ _ _ dt _) = dt
-projectileDistanceTraveled (EnemyShot _ _ _ _ dt) = dt
+projectileDamage (PlayerShot _ _ d _) = d
+projectileDamage (EnemyShot _ _ d) = d
 
 projectilePlayerId :: Projectile -> PlayerId
-projectilePlayerId (PlayerShot _ _ _ _ _ pId) = pId
-projectilePlayerId (EnemyShot _ _ _ _ _) = 0
+projectilePlayerId (PlayerShot _ _ _ pId) = pId
+projectilePlayerId (EnemyShot _ _ _) = 0
 
 -- Indicates if a projectile was fired by a player. Otherwise it was by an enemy.
 isPlayerShot :: Projectile -> Bool
-isPlayerShot (PlayerShot _ _ _ _ _ _) = True
-isPlayerShot (EnemyShot _ _ _ _ _) = False
+isPlayerShot (PlayerShot _ _ _ _) = True
+isPlayerShot (EnemyShot _ _ _) = False
 
--- Indicates if a projectile is inside the screen
+-- Moves a projectile
+moveProjectile :: Projectile -> ScreenScrollingSpeed -> Projectile
+moveProjectile proj ss =
+    let newPo = moveObject (projectileObject proj) ss
+    in 
+        if (isPlayerShot proj) then (initPlayerShot newPo (projectileAsset proj) (projectileDamage proj)(projectilePlayerId proj))
+        else (initEnemyShot newPo (projectileAsset proj) (projectileDamage proj))
+
+-- Indicates if a projectile is inside the screen. It is considered outside when COMPLETELY outside.
 insideScreenProjectile :: Projectile -> Bool
-insideScreenProjectile proj = 
-    let h = objectHitbox (projectileObject proj)
-    in (insideScreenHitbox h)
+insideScreenProjectile proj = insideScreenOrAboveHitbox (objectHitbox (projectileObject proj))
 
 -- ============================================================
 -- ================= PROJECTILE INVARIANT =====================
@@ -137,12 +128,22 @@ getTranslatedProjectileAssets :: GameAssets -> Projectile -> [Picture]
 getTranslatedProjectileAssets ga proj = 
     let po = projectileObject proj
         (px, py) = centerHitbox (objectHitbox po)
-        h = objectHitbox po
     in 
         if (isPlayerShot proj)
             then [Translate px py (Seq.index (playerShotPics ga) (projectileAsset proj))]-- ++ (translateHitbox h)
             else [Translate px py (Seq.index (enemyShotPics ga) (projectileAsset proj))]-- ++ (translateHitbox h)
-        
+
+-- ============================================================
+-- =================== PROJECTILE MOVABLE =====================
+-- ============================================================
+
+instance Movable Projectile where
+    move :: Projectile -> ScreenScrollingSpeed -> Projectile
+    move = moveProjectile
+
+    insideScreen :: Projectile -> Bool
+    insideScreen = insideScreenProjectile
+
 -- ============================================================
 -- ================= PROJECTILE COLLIDABLE ====================
 -- ============================================================
