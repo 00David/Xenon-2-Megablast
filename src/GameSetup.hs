@@ -13,13 +13,18 @@ type PlayerId = Int
 type Score = Int
 type ShootDelay = Int
 type ScreenScrollingSpeed = Float
+type FrameCounter = Int
+type ExplosionAnim = Int
 
 -- ============================================================
 -- ======================= GAME EVENTS ========================
 -- ============================================================
 
-maxFramesToConsider :: Int
+maxFramesToConsider :: FrameCounter
 maxFramesToConsider = framesPerSecond*1000000
+
+nbFramesPerExplosionPhase :: FrameCounter
+nbFramesPerExplosionPhase = 10
 
 maxEnemies :: Int
 maxEnemies = 20
@@ -44,10 +49,13 @@ bottomYScreenBound = -((fromIntegral heightScreen) / 2)
 bottomYScreenWithBarBound :: Float
 bottomYScreenWithBarBound = bottomYScreenBound+33 -- bottomYScreenBound counting bottom score bar
 
-widthVirus :: Float
-widthVirus = 65
-heightVirus :: Float
-heightVirus = 64
+widthEnemies :: Seq Float
+widthEnemies = fromList [60, 60, 72]
+heightEnemies :: Seq Float
+heightEnemies = fromList [60, 65, 100]
+
+nbEnemiesAssets :: Int
+nbEnemiesAssets = 3
 
 widthEnemyShotAssets :: Seq Float
 widthEnemyShotAssets = fromList [32, 32]
@@ -57,15 +65,13 @@ heightEnemyShotAssets = fromList [32, 32]
 nbEnemyShotAssets :: Int
 nbEnemyShotAssets = 2
 
-loadVirus :: IO Picture
-loadVirus = do
-    virus <- loadBMP "./assets/virus.bmp"
-    return virus
-
 widthPlayer :: Float
 widthPlayer = 110
 heightPlayer :: Float
 heightPlayer = 76
+
+nbPlayerExplosionAssets :: Int
+nbPlayerExplosionAssets = 6
 
 widthPlayerShotAssets :: Seq Float
 widthPlayerShotAssets = fromList [16]
@@ -86,6 +92,9 @@ nbRockAssets = 4
 -- Vertical spacing between wall segments (rocks).
 rockCell :: Float
 rockCell = index heightRockAssets 0
+
+nbHitAssets :: Int
+nbHitAssets = 7
 
 -- ============================================================
 -- ========================= SPEEDS ===========================

@@ -1,6 +1,8 @@
 {-# LANGUAGE InstanceSigs #-}
 module GameState.Player (module GameState.Player) where
 
+import Debug.Trace (trace)
+
 import Graphics.Gloss (Picture(Translate, Rotate))
 
 import qualified Data.Sequence as Seq
@@ -22,18 +24,19 @@ import Typeclasses.Movable
 type Lifes = Int -- player remaining lifes, inside of [1, 3]
 --type Health = Int -- health for the current player life, inside of ]0, 100]
 --type Score = Int -- player current score, positive
-type ExplosionAnim = Int -- player current explosion animation sprite, inside of [1, 7]
 --type ShootDelay = Int -- player shooting delay (in number of frames/second), >= 1, reseted at 1
+--type FrameCounter = Int -- frame counter of the current explosion phase, inside of [1, 10]
+--type ExplosionAnim = Int -- player current explosion animation sprite, inside of [0, 7]
 
 data Player = AliveP Object PlayerId Lifes Health Score ShootDelay
-    | DeadP Object PlayerId Score ExplosionAnim
+    | DeadP Object PlayerId Score FrameCounter ExplosionAnim
     deriving (Eq, Show)
 
 prop_inv_player :: Player -> Bool
 prop_inv_player p@(AliveP po pId lifes health score shootD) = prop_inv_object po && (pId == 1 || pId == 2) && lifes >= 1 && lifes <= 3
     && health >= 1 && health <= 100 && score >= 0 && insideScreenPlayer p && shootD >= 1
-prop_inv_player p@(DeadP po pId score anim) = prop_inv_object po && (pId == 1 || pId == 2) && score >= 0
-    && anim >= 1 && anim <= 7 && insideScreenPlayer p
+prop_inv_player p@(DeadP po pId score frameCpt phase) = prop_inv_object po && (pId == 1 || pId == 2) && score >= 0
+    && frameCpt >= 1 && frameCpt <= nbFramesPerExplosionPhase && phase >= 0 && phase <= nbPlayerExplosionAssets && insideScreenPlayer p
 
 initPlayerObject :: Float -> Float -> Direction -> ObjectSpeed -> Object
 initPlayerObject x y dir speed = 
@@ -51,43 +54,32 @@ initAlivePlayer po pId lifes health score shootD
     | shootD < 1 = error "shoot delay must be >= 1"
     | otherwise = AliveP po pId lifes health score shootD
 
-initDeadPlayer :: Object -> PlayerId -> Score -> ExplosionAnim -> Player
-initDeadPlayer po pId score anim
+initDeadPlayer :: Object -> PlayerId -> Score ->  FrameCounter -> ExplosionAnim -> Player
+initDeadPlayer po pId score frameCpt phase
     | score < 0 = error "score must be positive"
-    | anim < 1 || anim > 7 = error "animation number must be inside of [1, 7]" 
-    | otherwise = DeadP po pId score anim
+    | frameCpt < 1 || frameCpt > nbFramesPerExplosionPhase = error "frame counter must be inside of [1, 10]"
+    | phase < 0 || phase > nbPlayerExplosionAssets = error "animation phase must be inside of [0, 6]" 
+    | otherwise = DeadP po pId score frameCpt phase
 
 playerObject :: Player -> Object
 playerObject (AliveP o _ _ _ _ _) = o
-playerObject (DeadP o _ _ _) = o
-
-playerId :: Player -> PlayerId
-playerId (AliveP _ pId _ _ _ _) = pId
-playerId (DeadP _ pId _ _) = pId
+playerObject (DeadP o _ _ _ _) = o
 
 playerLifes :: Player -> Lifes
 playerLifes (AliveP _ _ l _ _ _) = l
-playerLifes (DeadP _ _ _ _) = 0
+playerLifes (DeadP _ _ _ _ _) = 0
 
 playerHealth :: Player -> Health
 playerHealth (AliveP _ _ _ h _ _) = h
-playerHealth (DeadP _ _ _ _) = 0
+playerHealth (DeadP _ _ _ _ _) = 0
 
 playerScore :: Player -> Score
 playerScore (AliveP _ _ _ _ s _) = s
-playerScore (DeadP _ _ s _) = s
-
-playerExplAnimation :: Player -> ExplosionAnim
-playerExplAnimation (AliveP _ _ _ _ _ _) = 0
-playerExplAnimation (DeadP _ _ _ anim) = anim
-
-playerShootDelay:: Player -> ShootDelay
-playerShootDelay (AliveP _ _ _ _ _ shootD) = shootD
-playerShootDelay (DeadP _ _ _ _) = 100000
+playerScore (DeadP _ _ s _ _) = s
 
 updatePlayerObject :: Player -> Object -> Player
 updatePlayerObject (AliveP _ pId lifes health score shootD) newPo = initAlivePlayer newPo pId lifes health score shootD
-updatePlayerObject (DeadP _ pId score anim) newPo = initDeadPlayer newPo pId score anim
+updatePlayerObject (DeadP _ pId score frameCpt phase) newPo = initDeadPlayer newPo pId score frameCpt phase
 
 prop_post_updatePlayerObject :: Player -> Object -> Bool
 prop_post_updatePlayerObject p newPo =
@@ -95,13 +87,13 @@ prop_post_updatePlayerObject p newPo =
     in case (p, newP) of
         ((AliveP _ pId lifes health score shootD), (AliveP obj' pId' lifes' health' score' shootD')) ->
             obj' == newPo && pId' == pId && lifes' == lifes && health' == health && score' == score && shootD' == shootD
-        ((DeadP _ pId score anim), (DeadP obj' pId' score' anim')) ->
-            obj' == newPo && pId' == pId && score' == score && anim' == anim
+        ((DeadP _ pId score frameCpt phase), (DeadP obj' pId' score' frameCpt' phase')) ->
+            obj' == newPo && pId' == pId && score' == score && frameCpt' == frameCpt && phase' == phase
         (_,_)-> False
 
 addScore :: Score -> Player -> Player
 addScore s (AliveP obj pId lifes health score shootD) = initAlivePlayer obj pId lifes health (score+s) shootD
-addScore s (DeadP obj pId score anim) = initDeadPlayer obj pId (score+s) anim
+addScore s (DeadP obj pId score frameCpt phase) = initDeadPlayer obj pId (score+s) frameCpt phase
 
 prop_pre_addScore :: Score -> Player -> Bool
 prop_pre_addScore s _ = s >= 0
@@ -119,24 +111,25 @@ prop_post_addScore s p =
             && score2 == score1 + s
             && shootD1 == shootD2
 
-        (DeadP obj1 pId1 score1 anim1,
-         DeadP obj2 pId2 score2 anim2) ->
+        (DeadP obj1 pId1 score1 frameCpt1 phase1,
+         DeadP obj2 pId2 score2 frameCpt2 phase2) ->
                 obj1 == obj2
             && pId1 == pId2
             && score2 == score1 + s
-            && anim1 == anim2
+            && frameCpt1 == frameCpt2
+            && phase1 == phase2
         _ -> False
 
 -- Indicates if a player is dead. Otherwise he is alive.
 isPlayerDead :: Player -> Bool
 isPlayerDead (AliveP _ _ _ _ _ _) = False
-isPlayerDead (DeadP _ _ _ _) = True
+isPlayerDead (DeadP _ _ _ _ _) = True
 
 -- Moves a player, with X and Y indepedant directions : if one of those directions leads outside of the screen, 
 -- the movement in the concerned direction will be independantly canceled.
 -- Don't take into account walls, just screen borders with the bottom bar too.
 movePlayer :: Player -> ScreenScrollingSpeed -> Player
-movePlayer p@(DeadP _ _ _ _) _ = p
+movePlayer p@(DeadP _ _ _ _ _) _ = p
 movePlayer p@(AliveP po pId lifes health score shootDelay) ss =
     let 
         (Direction dirX dirY) = objectDirection po
@@ -176,7 +169,7 @@ prop_pre_movePlayer :: Player -> ScreenScrollingSpeed -> Bool
 prop_pre_movePlayer p _ = insideScreenPlayer p
 
 prop_post_movePlayer :: Player -> ScreenScrollingSpeed -> Bool
-prop_post_movePlayer p@(DeadP _ _ _ _) ss = 
+prop_post_movePlayer p@(DeadP _ _ _ _ _) ss = 
     let newP = movePlayer p ss
     in p == newP
 prop_post_movePlayer p@(AliveP po pId lifes health score shootD) ss = 
@@ -246,7 +239,35 @@ playerShot (AliveP po pId _ _ _ _) =
         assetIndex = 0
         projO = (playerShotObject dir s x (y+50) assetIndex)
     in Just (initPlayerShot projO assetIndex playerDefaultShotDamage pId)
-playerShot (DeadP _ _ _ _) = Nothing
+playerShot (DeadP _ _ _ _ _) = Nothing
+
+-- Run the dead player explosion animation and returns the updated player : either update him, or does nothing if not dead or animation is finished
+runPlayerExplosion :: Player -> Player
+runPlayerExplosion p@(AliveP _ _ _ _ _ _) = p
+runPlayerExplosion (DeadP po pId score frameCpt phase)
+    | phase == nbPlayerExplosionAssets = (initDeadPlayer po pId score frameCpt phase) -- dont't change anything if the explosion animation has been done (phase == nbPlayerExplosionAssets)
+    | frameCpt < nbFramesPerExplosionPhase = (initDeadPlayer po pId score (frameCpt+1) phase) -- increments the frames counter if limit not reached (nbFramesPerExplosionPhase)
+    | frameCpt == nbFramesPerExplosionPhase = (initDeadPlayer po pId score 1 (phase+1)) -- once the frames limit has been reached, reset the frame counter and go to the next explosion phase
+    | otherwise = error $ "impossible case "++(show frameCpt)++" "++(show phase)
+
+prop_post_runPlayerExplosion :: Player -> Bool
+prop_post_runPlayerExplosion p =
+    let p' = runPlayerExplosion p
+    in case (p, p') of
+        -- Alive stays the same
+        (AliveP obj1 id1 l1 h1 s1 d1,
+         AliveP obj2 id2 l2 h2 s2 d2) ->
+            obj1 == obj2 && id1 == id2 && l1 == l2 && h1 == h2 && s1 == s2 && d1 == d2
+        -- Dead : verify the correct evolution of the animation
+        (DeadP obj1 id1 s1 frameCpt1 phase1,
+         DeadP obj2 id2 s2 frameCpt2 phase2) ->
+            obj1 == obj2 && id1 == id2 && s2 == s1
+            && (
+                (phase1 == nbPlayerExplosionAssets && frameCpt2 == frameCpt1 && phase2 == phase1)
+             || (frameCpt1 < nbFramesPerExplosionPhase && frameCpt2 == frameCpt1 + 1 && phase2 == phase1)
+             || (frameCpt1 == nbFramesPerExplosionPhase && frameCpt2 == 1 && phase2 == phase1 + 1)
+               )
+        _ -> False
 
 -- ============================================================
 -- =================== PLAYER INVARIANT =======================
@@ -266,15 +287,24 @@ instance Renderable Player where
         if not (isPlayerDead player) then
             getTranslatedBoosterAssets ga player ++
             getTranslatedPlayerAssets ga player
-        else []
+        else getTranslatedPlayerAssets ga player -- translate only the potential animation if dead
 
 -- Returns a list of translated player assets.
 getTranslatedPlayerAssets :: GameAssets -> Player -> [Picture]
-getTranslatedPlayerAssets ga player = 
-    let po = playerObject player
-        (px, py) = centerHitbox (objectHitbox po)
+getTranslatedPlayerAssets ga (AliveP po pId _ _ _ _) = 
+    let (px, py) = centerHitbox (objectHitbox po)
         h = objectHitbox po
-    in [Translate px py (p1Pic ga)] ++ (translateHitbox h)
+        pic = if pId == 1 then (p1Pic ga) else (p2Pic ga)
+    in [Translate px py pic] ++ (translateHitbox h)
+getTranslatedPlayerAssets ga (DeadP po pId _ _ phase) =
+    let (px, py) = centerHitbox (objectHitbox po)
+    in 
+        if phase >= 0 && phase < nbPlayerExplosionAssets 
+            then 
+                if pId == 1 then [Translate px py (Seq.index (p1ExplosionPics ga) phase)]
+                else [Translate px py (Seq.index (p2ExplosionPics ga) phase)]
+        else [] -- when the animation has been done, no more rendering (phase == nbPlayerExplosionAssets)
+
 
 -- Returns a list of translated booster assets for boosters only enabled when moving with the right player direction.
 getTranslatedBoosterAssets :: GameAssets -> Player -> [Picture]
@@ -351,7 +381,7 @@ instance Collidable Player where
 instance Damageable Player where
     currentHealth :: Player -> Maybe Health
     currentHealth (AliveP _ _ _ h _ _) = Just h
-    currentHealth (DeadP _ _ _ _) = Nothing
+    currentHealth (DeadP _ _ _ _ _) = Nothing
 
     takeDamage :: Damage -> Player -> Maybe Player
     takeDamage d (AliveP obj pId lifes health score shootD) =
@@ -362,5 +392,5 @@ instance Damageable Player where
                 let newLifes = lifes-1
                 in 
                     if newLifes > 0 then Just (initAlivePlayer obj pId newLifes 100 score shootD) -- health restored at 100
-                    else Just (initDeadPlayer obj pId score 1) -- dead
-    takeDamage _ dead@(DeadP _ _ _ _) = Just dead
+                    else Just (initDeadPlayer obj pId score 1 0) -- dead
+    takeDamage _ dead@(DeadP _ _ _ _ _) = Just dead

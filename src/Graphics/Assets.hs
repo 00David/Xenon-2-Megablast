@@ -44,9 +44,11 @@ data GameAssets = GameAssets {
     -- players
     p1Pic :: Picture,
     p2Pic :: Picture,
+    p1ExplosionPics :: Seq Picture,
+    p2ExplosionPics :: Seq Picture,
     pBoosterPics :: Seq Picture,
     -- enemies
-    virusPic :: Picture,
+    enemiesPics :: Seq Picture,
     -- bottom bar
     bottomLeftPic :: Picture,
     bottomBarPic :: Picture,
@@ -58,17 +60,21 @@ data GameAssets = GameAssets {
     leftWallPics :: Seq Picture,
     rightWallPics :: Seq Picture,
     -- shots
-    playerShotPics :: Seq Picture,
-    enemyShotPics :: Seq Picture
+    player1ShotPics :: Seq Picture,
+    player2ShotPics :: Seq Picture,
+    enemyShotPics :: Seq Picture,
+    -- hit explosions
+    hitPics :: Seq Picture
 } deriving Show
 
 initGameAssets :: IO GameAssets
 initGameAssets = do
-    p1 <- loadPNG "./assets/spaceship/spaceship_norm.png"
-    p2 <- loadPNG "./assets/spaceship/spaceship_norm.png"
-    -- spaceship boosters are loaded into an array
+    p1 <- loadPNG "./assets/spaceship/player1/spaceship.png"
+    p2 <- loadPNG "./assets/spaceship/player2/spaceship.png"
+    p1Explosions <- initPlayerExplosionAssets True
+    p2Explosions <- initPlayerExplosionAssets False
     boosters <- initBoosterAssets
-    v <- loadBMP "./assets/virus.bmp"
+    enemies <- initEnemiesAssets
     bottomLeft <- loadPNG "./assets/bottom_score/bottom_left_bar.png"
     bottomBar <- loadPNG "./assets/bottom_score/bottom_center_bar/bottom_bar.png"
     bottomRight <- loadPNG "./assets/bottom_score/bottom_right_bar.png"
@@ -77,11 +83,13 @@ initGameAssets = do
     p2Health <- initHealthP2Assets
     leftWalls <- initWallAssets True
     rightWalls <- initWallAssets False
-    pShots <- initPlayerShotAssets
+    p1Shots <- initPlayerShotAssets True
+    p2Shots <- initPlayerShotAssets False
     eShots <- initEnemyShotAssets
-    return $ GameAssets p1 p2 boosters v 
+    hits <- initHitAssets
+    return $ GameAssets p1 p2 p1Explosions p2Explosions boosters enemies
         bottomLeft bottomBar bottomRight ds p1Health p2Health leftWalls rightWalls 
-        pShots eShots
+        p1Shots p2Shots eShots hits
 
 -- Translates a hitbox into its visible borders, for debug purpose
 translateHitbox :: Hitbox -> [Picture]
@@ -276,6 +284,19 @@ prop_pre_getDigitAsset _ i
     | otherwise = True
 
 -- ============================================================
+-- =============== PLAYER EXPLOSION ASSET =====================
+-- ============================================================
+
+initPlayerExplosionAssets :: Bool -> IO (Seq Picture)
+initPlayerExplosionAssets isP1 =
+    if isP1 then do
+        expl <- sequence [loadPNG ("./assets/spaceship/player1/explosion/spaceship_expl" ++ show n ++ ".png") | n <- [0..(nbPlayerExplosionAssets-1) :: Int]]
+        return (Seq.fromList expl)
+    else do
+        expl <- sequence [loadPNG ("./assets/spaceship/player2/explosion/spaceship_expl" ++ show n ++ ".png") | n <- [0..(nbPlayerExplosionAssets-1) :: Int]]
+        return (Seq.fromList expl)
+
+-- ============================================================
 -- ==================== BOOSTER ASSETS ========================
 -- ============================================================
 
@@ -287,6 +308,15 @@ initBoosterAssets = do
         , loadPNG "./assets/spaceship/booster_top_left.png"
         , loadPNG "./assets/spaceship/booster_top_right.png"]
     return (Seq.fromList boosters)
+
+-- ============================================================
+-- ==================== ENEMIES ASSETS ========================
+-- ============================================================
+
+initEnemiesAssets :: IO (Seq Picture)
+initEnemiesAssets = do
+    enemies <- sequence [loadPNG ("./assets/enemies/enemy" ++ show n ++ ".png") | n <- [0..(nbEnemiesAssets-1) :: Int]]
+    return (Seq.fromList enemies)
 
 -- ============================================================
 -- ====================== WALL ASSETS =========================
@@ -302,12 +332,25 @@ initWallAssets left = do
 -- ====================== SHOT ASSETS =========================
 -- ============================================================
 
-initPlayerShotAssets :: IO (Seq Picture)
-initPlayerShotAssets = do
-    pShots <- sequence [loadPNG ("./assets/shots/playerShot" ++ show n ++ ".png") | n <- [0..(nbPlayerShotAssets-1) :: Int]]
-    return (Seq.fromList pShots)
+initPlayerShotAssets :: Bool -> IO (Seq Picture)
+initPlayerShotAssets isP1 =
+    if isP1 then do
+        pShots <- sequence [loadPNG ("./assets/shots/player1Shot" ++ show n ++ ".png") | n <- [0..(nbPlayerShotAssets-1) :: Int]]
+        return (Seq.fromList pShots)
+    else do
+        pShots <- sequence [loadPNG ("./assets/shots/player2Shot" ++ show n ++ ".png") | n <- [0..(nbPlayerShotAssets-1) :: Int]]
+        return (Seq.fromList pShots)
 
 initEnemyShotAssets :: IO (Seq Picture)
 initEnemyShotAssets = do
     eShots <- sequence [loadPNG ("./assets/shots/enemyShot" ++ show n ++ ".png") | n <- [0..(nbEnemyShotAssets-1) :: Int]]
     return (Seq.fromList eShots)
+
+-- ============================================================
+-- ====================== HIT ASSETS =========================
+-- ============================================================
+
+initHitAssets :: IO (Seq Picture)
+initHitAssets = do
+    hits <- sequence [loadPNG ("./assets/hit/expl" ++ show n ++ ".png") | n <- [0..(nbHitAssets-1) :: Int]]
+    return (Seq.fromList hits)

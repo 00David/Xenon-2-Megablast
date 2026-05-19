@@ -1,0 +1,92 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE InstanceSigs #-}
+module Graphics.Explosion (module Graphics.Explosion) where
+
+import Graphics.Gloss (Picture(Translate))
+
+import qualified Data.Sequence as Seq
+
+import GameSetup
+import Graphics.Assets
+import Objects.Objects
+import Objects.Hitbox
+import Typeclasses.Invariant
+
+data Explosion = Explosion {
+    explosionX :: Float, -- X center of the explosion
+    explosionY :: Float, -- Y center of the explosion
+    explosionPhaseCounter :: FrameCounter, -- frame counter of the current explosion phase, inside of [1, 10]
+    explosionPhase :: ExplosionAnim -- the current explosion phase (= explosion animation), inside of [0, 6]
+} deriving (Show, Eq)
+
+prop_inv_explosion :: Explosion -> Bool
+prop_inv_explosion (Explosion _ _ cpt phase) =
+    cpt >= 1 && cpt <= nbFramesPerExplosionPhase
+    && phase >= 0 && phase <= (nbHitAssets-1)
+
+initExplosion :: Float -> Float -> FrameCounter -> ExplosionAnim -> Explosion
+initExplosion x y cpt phase
+    | cpt < 1 || cpt > nbFramesPerExplosionPhase = error "invalid explosion frames counter"
+    | phase < 0 || phase > (nbHitAssets-1) = error "invalid number of explosion phase"
+    | otherwise = (Explosion x y cpt phase)
+
+startInitExplosion :: Float -> Float -> Explosion
+startInitExplosion x y = (initExplosion x y 1 0) -- frame counter at 1, explosion phase at 0
+
+-- Run the explosion animation : either returns the updated explosion animation, or Nothing if it has finished
+runExplosion :: Explosion -> Maybe Explosion
+runExplosion (Explosion x y cpt phase)
+    | cpt < nbFramesPerExplosionPhase = Just (initExplosion x y (cpt+1) phase) -- increments the frames counter if limit not reached (nbFramesPerExplosionPhase)
+    | cpt == nbFramesPerExplosionPhase = -- once the frames limit is reached
+        if phase == (nbHitAssets-1) then Nothing -- if during last phase, returns nothing
+        else Just (initExplosion x y 1 (phase+1)) -- otherwise, reset the frame counter and go to the next explosion phase
+    | otherwise = error $ "impossible case "++(show cpt)++" "++(show phase)
+
+-- Get explosions, by veryfing if a collidable has disapeared from the original list
+getExplosions :: forall a. (Collidable a, Eq a) => [a] -> [a] -> [Explosion]
+getExplosions beforeCollisions afterCollisions =
+    let 
+        -- Get the dissaperead collidables (those in 'beforeCollisions', not anymore in 'afterCollisions')
+        disappeared =
+            filter (\collBefore ->
+                not (any (\collAfter -> collBefore == collAfter)
+                        afterCollisions))
+                beforeCollisions
+    in
+        concatMap createExplosions disappeared
+        where
+            -- Create explosions for each collidable given
+            createExplosions :: a -> [Explosion]
+            createExplosions coll =
+                let 
+                    objs = getObjects coll -- in general, only one object is got here
+                in map (\obj ->
+                    let (x, y) = centerHitbox (objectHitbox obj)
+                    in (startInitExplosion x y)) objs
+
+prop_pre_getExplosions :: [a] -> [a] -> Bool
+prop_pre_getExplosions beforeCollisions afterCollisions = length afterCollisions <= length beforeCollisions
+
+-- There is 1 explosion created per object from the collidable, but the collidable can
+-- be represented by multiple objects (like walls), so it is impossible to have a
+-- post condition on the resulting explosions list
+
+-- ============================================================
+-- =================== EXPLOSION INVARIANT =======================
+-- ============================================================
+
+instance Invariant Explosion where
+    prop_inv :: Explosion -> Bool
+    prop_inv = prop_inv_explosion 
+
+-- ============================================================
+-- ==================== ENEMY RENDERABLE ======================
+-- ============================================================
+
+instance Renderable Explosion where
+    getTranslatedAssets :: GameAssets -> Explosion -> [Picture]
+    getTranslatedAssets ga explosion = getTranslatedExplosionAsset ga explosion
+
+-- Returns the translated explosion asset
+getTranslatedExplosionAsset :: GameAssets -> Explosion -> [Picture]
+getTranslatedExplosionAsset ga (Explosion x y _ phase) = [Translate x y (Seq.index (hitPics ga) phase)]

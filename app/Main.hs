@@ -15,7 +15,6 @@ import GameState.Game
 import GameState.Player
 import Graphics.Assets
 import Graphics.Background
-import EnemySpawns
 import Keyboard
 
 -- Rendering
@@ -59,11 +58,10 @@ handleEventsIO ev game@(Game kbd (StartMenu option) _ _ counter) = do
     -- if the space bar is pressed on "Start", launches the game
     if option == Start && (isKeyDown (SpecialKey KeySpace) newKBD)
         then do
-            (vx, vy) <- generateVirusCoordinates
             gen <- newStdGen
             return game{
                 keyboard = initKeyboard,
-                state = startInitInGame gen vx vy 0 0 0 0
+                state = startInitInGame gen 0 0 0 0
                 }
         else 
             if isKeyDown (SpecialKey KeyEsc) newKBD
@@ -78,7 +76,7 @@ handleEventsIO ev game@(Game kbd (StartMenu option) _ _ counter) = do
                     _ -> return game{keyboard = newKBD}
 
 -- In game
-handleEventsIO ev game@(Game kbd (InGame (InGameInfos ss p1 p2 enemies walls projectiles)) _ _ _) = do
+handleEventsIO ev game@(Game kbd (InGame (InGameInfos ss p1 p2 enemies walls projectiles expl)) _ _ _) = do
     -- trace ("event received: " <> show ev) 
     let newKBD = (handleKeyEvent ev kbd) -- keyboard update
 
@@ -92,7 +90,7 @@ handleEventsIO ev game@(Game kbd (InGame (InGameInfos ss p1 p2 enemies walls pro
                     Nothing -> return game{keyboard = newKBD}
                     Just shot -> 
                         let newProjectiles = shot : projectiles
-                            newIgi = initInGameInfos ss p1 p2 enemies walls newProjectiles
+                            newIgi = initInGameInfos ss p1 p2 enemies walls newProjectiles expl
                         in return game{keyboard = newKBD, state = (InGame newIgi)}
                 else return game{keyboard = newKBD}
 
@@ -103,7 +101,7 @@ updateIO :: Float -> Game -> IO Game
 updateIO _ game@(Game _ (StartMenu _) _ _ _) = return game 
 
 -- In game
-updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos _ _ _ _ _ _)) _ bgnd counter) = do 
+updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos _ _ _ _ _ _ _)) _ bgnd counter) = do 
     gen <- newStdGen
     let 
         -- Background update
@@ -116,16 +114,6 @@ updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos _ _ _ _ _ _)) _ bgnd 
         newCounter = (counter + 1) `mod` maxFramesToConsider
 
     return game{state = (InGame ig2), background = newBgnd, frameCounter = newCounter}
-
-    -- in case of collision with the virus, moves it elsewhere
-    {--if length (gameEnemies ig2) == 0 then trace "VIRUS DETRUIT !" $ do
-        (newVX, newVY) <- generateVirusCoordinates
-        let newE = (startInitLoopEnemy 0 (topYScreenBound+200) 0)
-            newEnemies = [newE]
-        return game{state = (initInGame(initInGameInfos (gameScreenSpeed ig2) (gamePlayer1 ig2) (gamePlayer2 ig2) newEnemies (gameWalls ig2) (gameProjectiles ig2))), 
-            background = newBgnd, frameCounter = newCounter}
-    else
-        return game{state = (InGame ig2), background = newBgnd, frameCounter = newCounter}--}
 
 -- Game loop
 main :: IO ()

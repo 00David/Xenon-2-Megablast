@@ -125,13 +125,14 @@ instance Renderable Projectile where
 
 -- Returns a list of translated projectile assets.
 getTranslatedProjectileAssets :: GameAssets -> Projectile -> [Picture]
-getTranslatedProjectileAssets ga proj = 
-    let po = projectileObject proj
-        (px, py) = centerHitbox (objectHitbox po)
+getTranslatedProjectileAssets ga (PlayerShot po asset _ pId) = 
+    let (px, py) = centerHitbox (objectHitbox po)
     in 
-        if (isPlayerShot proj)
-            then [Translate px py (Seq.index (playerShotPics ga) (projectileAsset proj))]-- ++ (translateHitbox h)
-            else [Translate px py (Seq.index (enemyShotPics ga) (projectileAsset proj))]-- ++ (translateHitbox h)
+        if pId == 1 then [Translate px py (Seq.index (player1ShotPics ga) asset)]-- ++ (translateHitbox h)
+        else [Translate px py (Seq.index (player2ShotPics ga) asset)]-- ++ (translateHitbox h)
+getTranslatedProjectileAssets ga (EnemyShot po asset _) =
+    let (px, py) = centerHitbox (objectHitbox po)
+    in [Translate px py (Seq.index (enemyShotPics ga) asset)]-- ++ (translateHitbox h)
 
 -- ============================================================
 -- =================== PROJECTILE MOVABLE =====================

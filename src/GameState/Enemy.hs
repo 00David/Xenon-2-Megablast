@@ -4,6 +4,9 @@ module GameState.Enemy (module GameState.Enemy) where
 
 import Graphics.Gloss (Picture(Translate))
 
+import System.Random
+import qualified Data.Sequence as Seq
+
 import GameSetup
 import GameState.Projectile
 import Graphics.Assets
@@ -36,21 +39,64 @@ initEnemy eo health dmg score script
     | score <= 0 = error "ennemy given score must be strictly positive"
     | otherwise = Enemy eo health dmg score script
 
-startInitNoMoveButBiteEnemy :: Float -> Float -> Enemy
-startInitNoMoveButBiteEnemy x y =
-    let eo = (initStaticObject 
-                (initHitboxRectangle (x-(widthVirus / 2)) (y-(heightVirus / 2)) widthVirus heightVirus)
-            )
+noMoveButBoomEnemyHitbox :: Float -> Float -> Hitbox
+noMoveButBoomEnemyHitbox x y =
+    let width = Seq.index widthEnemies 0
+        height = Seq.index heightEnemies 0
+    in initHitboxes x y
+        [ 
+            initHitboxRectangle (x-8) (y-(height/2)) 16 height,
+            initHitboxRectangle (x-22) (y-25) 44 57,
+            initHitboxRectangle (x-27) (y-22) 54 41,
+            initHitboxRectangle (x-30) (y-11) width 22
+        ]
+
+leftRightShootEnemyHitbox :: Float -> Float -> Hitbox
+leftRightShootEnemyHitbox x y =
+    let width = Seq.index widthEnemies 1
+        height = Seq.index heightEnemies 1
+    in initHitboxes x y
+        [ 
+            initHitboxRectangle (x-10) (y-32) 20 height,
+            initHitboxRectangle (x-17) (y-10) 34 43,
+            initHitboxRectangle (x-30) (y-2) width 32
+        ]
+
+loopEnemyHitbox :: Float -> Float -> Hitbox
+loopEnemyHitbox x y =
+    let width = Seq.index widthEnemies 2
+        height = Seq.index heightEnemies 2
+    in initHitboxes x y
+        [ 
+            initHitboxRectangle (x-36) (y-32) width 70,
+            initHitboxRectangle (x-29) (y-36) 58 77,
+            initHitboxRectangle (x-21) (y-40) 42 85,
+            initHitboxRectangle (x-13) (y-44) 26 93,
+            initHitboxRectangle (x-5) (y-49) 10 (height-1)
+        ]
+
+placeEnemy :: Float -> Float -> Enemy
+placeEnemy x y =
+    let eo = (initMovableObject (loopEnemyHitbox x y) (initDirection 0 0) (initObjectSpeed 0))
     in (initEnemy eo 
         noMoveButBiteEnemyHealth 
         noMoveButBiteEnemyCollisionDamage 
         noMoveButBiteEnemyScore 
-        startInitNoMoveButBiteEnemyScript)
+        startInitNoMoveButBoomEnemyScript)
+
+startInitNoMoveButBoomEnemy :: Float -> Float -> Enemy
+startInitNoMoveButBoomEnemy x y =
+    let eo = (initStaticObject (noMoveButBoomEnemyHitbox x y))
+    in (initEnemy eo 
+        noMoveButBiteEnemyHealth 
+        noMoveButBiteEnemyCollisionDamage 
+        noMoveButBiteEnemyScore 
+        startInitNoMoveButBoomEnemyScript)
 
 startInitLeftRightShootEnemy :: Float -> Float -> Float -> Float -> Enemy
 startInitLeftRightShootEnemy x y xTarget yTarget =
     let eo = (initMovableObject 
-                (initHitboxRectangle (x-(widthVirus / 2)) (y-(heightVirus / 2)) widthVirus heightVirus)
+                (leftRightShootEnemyHitbox x y)
                 (initDirection 0 (-1))
                 (initObjectSpeed leftRightShootEnemySpeed)
             )
@@ -63,7 +109,7 @@ startInitLeftRightShootEnemy x y xTarget yTarget =
 startInitLoopEnemy :: Float -> Float -> Float -> Enemy
 startInitLoopEnemy x y yTarget =
     let eo = (initMovableObject 
-                (initHitboxRectangle (x-(widthVirus / 2)) (y-(heightVirus / 2)) widthVirus heightVirus)
+                (loopEnemyHitbox x y)
                 (initDirection 0 (-1))
                 (initObjectSpeed loopEnemySpeed)
             )
@@ -98,7 +144,7 @@ moveEnemy :: Enemy -> ScreenScrollingSpeed -> Enemy
 moveEnemy (Enemy eo health dmg score script) screenSpeed =
     let newEo = (moveObject eo screenSpeed) -- moves the enemy
     in case script of
-        (NoMoveButBiteEnemy) -> (initEnemy newEo health dmg score initNoMoveButBiteEnemyScript)
+        (NoMoveButBoomEnemy) -> (initEnemy newEo health dmg score initNoMoveButBoomEnemyScript)
         (LeftRightShootEnemy xTarget yTarget shootD) -> 
             let
                 (Direction xDir yDir) = objectDirection newEo
@@ -174,7 +220,7 @@ prop_pre_moveEnemy (Enemy eo _ _ _ script) screenSpeed =
         (x,y) = centerHitbox (objectHitbox eo)
         (ObjectSpeed speed) = objectSpeed eo
     in case script of
-        (NoMoveButBiteEnemy) -> positiveScreenSpeed && speed == 0 && dirX == 0 && dirY == 0
+        (NoMoveButBoomEnemy) -> positiveScreenSpeed && speed == 0 && dirX == 0 && dirY == 0
         (LeftRightShootEnemy xTarget yTarget _) -> 
             let
                 movingBottomIfAbove = if y > yTarget then dirY == -1 else True
@@ -254,9 +300,9 @@ prop_post_moveEnemy e@(Enemy eo health dmg score script) screenSpeed =
 
     in eveythingElseSame && objectHasCorrectlyMoved && speedUnchanged &&
         case script of
-            (NoMoveButBiteEnemy) -> 
+            (NoMoveButBoomEnemy) -> 
                 -- Script and direction have not changed
-                script' == NoMoveButBiteEnemy && dirX' == 0 && dirY' == 0
+                script' == NoMoveButBoomEnemy && dirX' == 0 && dirY' == 0
                 
             (LeftRightShootEnemy xTarget yTarget shootD) -> 
                 case script' of
@@ -429,6 +475,68 @@ prop_post_shootEnemy e@(Enemy eo health dmg score script) =
                 Nothing -> True
                 Just _ -> False
 
+-- Generates randomly a list of enemies, represented by a formation
+generateListEnemies :: Int -> StdGen -> (StdGen,[Enemy])
+generateListEnemies n gen
+    | n <= 0 = (gen,[])
+    | otherwise =
+        let
+            -- Common enemy type for whole wave
+            (enemyType, gen1) = randomR (0 :: Int, 2) gen
+
+            -- Center X of formation
+            (centerX, gen2) = randomR (leftXScreenBound+300, rightXScreenBound-300) gen1
+
+            -- Same Y for everybody
+            (offsetY, gen3) = randomR (50,300) gen2
+            y = topYScreenBound + offsetY
+
+            -- Same target Y for everybody
+            (targetOffset, gen4) = randomR (100,300) gen3
+            yTarget = topYScreenBound - targetOffset
+
+            -- Same X target for whole formation
+            (xTarget, gen5) = randomR (150,rightXScreenBound-150) gen4
+
+            enemies = generateFormation enemyType n centerX y xTarget yTarget
+        in
+            (gen5,enemies)
+
+prop_post_generateListEnemies :: Int -> StdGen -> Bool
+prop_post_generateListEnemies n gen =
+    let (gen', newEnemies) = generateListEnemies n gen
+    in gen' /= gen && all insideScreen newEnemies -- for an Enemy, he is considered inside even above screen
+
+-- Generates a formation of enemies, for the given parameters
+generateFormation :: Int -> Int -> Float -> Float -> Float -> Float -> [Enemy]
+generateFormation enemyType n centerX y xTarget yTarget =
+    let
+        spacing = 100
+        startX = centerX - fromIntegral (n-1) * spacing / 2
+        xs = [startX + fromIntegral i * spacing | i <- [0..n-1]]
+    in
+        fmap (\x ->
+                case enemyType of
+                    0 -> startInitNoMoveButBoomEnemy x y
+                    1 -> startInitLeftRightShootEnemy x y xTarget yTarget
+                    _ -> startInitLoopEnemy x y yTarget
+            ) xs
+
+prop_pre_generateFormation :: Int -> Int -> Float -> Float -> Float -> Float -> Bool
+prop_pre_generateFormation enemyType n centerX y xTarget yTarget =
+    (enemyType >= 0 && enemyType <= 2) && (n >= 1 && n <= 5) -- verifies the type and number of enemies
+    -- given the spacing (100) and the max number of enemies in the formation (5), ensures that the center of it will show all enemies
+    && centerX >= (leftXScreenBound+200) && centerX <= (rightXScreenBound-200)
+    && y > topYScreenBound -- y above screen because enemies spawn above
+    && (yTarget >= bottomYScreenBound && yTarget <= topYScreenBound) -- y and x target inside the screen
+    && (xTarget >= leftXScreenBound && xTarget <= rightXScreenBound) 
+
+prop_post_generateFormation :: Int -> Int -> Float -> Float -> Float -> Float -> Bool
+prop_post_generateFormation enemyType n centerX y xTarget yTarget =
+    let newEnemies = generateFormation enemyType n centerX y xTarget yTarget
+    in (length newEnemies) > 0 && all insideScreen newEnemies -- for an Enemy, he is considered inside even above screen
+
+
 -- ============================================================
 -- =================== ENNEMY INVARIANT =======================
 -- ============================================================
@@ -447,11 +555,13 @@ instance Renderable Enemy where
 
 -- Returns a list of translated enemy assets.
 getTranslatedEnemyAsset :: GameAssets -> Enemy -> [Picture]
-getTranslatedEnemyAsset ga enemy = 
-    let eo = enemyObject enemy
-        (ex, ey) = centerHitbox (objectHitbox eo)
+getTranslatedEnemyAsset ga (Enemy eo _ _ _ script) = 
+    let (ex, ey) = centerHitbox (objectHitbox eo)
         h = objectHitbox eo
-    in [Translate ex ey (virusPic ga)] ++ (translateHitbox h)
+    in case script of
+        (NoMoveButBoomEnemy) -> [Translate ex ey (Seq.index (enemiesPics ga) 0)]-- ++ (translateHitbox h)
+        (LeftRightShootEnemy _ _ _) -> [Translate ex ey (Seq.index (enemiesPics ga) 1)]-- ++ (translateHitbox h)
+        (LoopEnemy _ _ _ _ _ _ _ _ _) -> [Translate ex ey (Seq.index (enemiesPics ga) 2)]-- ++ (translateHitbox h)
 
 -- ============================================================
 -- ===================== ENEMY MOVABLE =======================
@@ -511,7 +621,7 @@ defaultNbSteps = 10
 type DelayRemaining = Int
 
 data EnemyScript =
-    NoMoveButBiteEnemy
+    NoMoveButBoomEnemy
     | LeftRightShootEnemy{ 
             xTargetEnemyScript :: Float,  -- the X that the enemy must reach while going left or right. Once it is reached, its sign is inverted. 
             yTargetEnemyScript :: Float, -- the Y that the enemy must reach before going left/right
@@ -531,7 +641,7 @@ data EnemyScript =
     deriving (Eq, Show)
 
 prop_inv_enemyScript :: EnemyScript -> Bool
-prop_inv_enemyScript (NoMoveButBiteEnemy) = True
+prop_inv_enemyScript (NoMoveButBoomEnemy) = True
 prop_inv_enemyScript (LeftRightShootEnemy xTarget yTarget shootD) = 
     xTarget > leftXScreenBound && xTarget < rightXScreenBound
     && yTarget > bottomYScreenWithBarBound 
@@ -546,8 +656,8 @@ prop_inv_enemyScript (LoopEnemy yTarget blSteps lSteps tlSteps tSteps trSteps rS
     && rSteps >= 0 && rSteps <= defaultNbSteps
     && brSteps >= 0 && brSteps <= defaultNbSteps
 
-initNoMoveButBiteEnemyScript :: EnemyScript
-initNoMoveButBiteEnemyScript = NoMoveButBiteEnemy
+initNoMoveButBoomEnemyScript :: EnemyScript
+initNoMoveButBoomEnemyScript = NoMoveButBoomEnemy
 
 initLeftRightShootEnemyScript :: Float -> Float -> DelayRemaining -> EnemyScript
 initLeftRightShootEnemyScript xTarget yTarget shootDelay
@@ -569,8 +679,8 @@ initLoopEnemyScript yTarget blSteps lSteps tlSteps tSteps trSteps rSteps brSteps
     | brSteps < 0 || brSteps > defaultNbSteps = error "invalid bottomRightSteps"
     | otherwise = LoopEnemy yTarget blSteps lSteps tlSteps tSteps trSteps rSteps brSteps goBottom
 
-startInitNoMoveButBiteEnemyScript :: EnemyScript
-startInitNoMoveButBiteEnemyScript = initNoMoveButBiteEnemyScript
+startInitNoMoveButBoomEnemyScript :: EnemyScript
+startInitNoMoveButBoomEnemyScript = initNoMoveButBoomEnemyScript
 
 startInitLeftRightShootEnemyScript :: Float -> Float -> EnemyScript
 startInitLeftRightShootEnemyScript xTarget yTarget = (initLeftRightShootEnemyScript xTarget yTarget leftRightShootEnemyShootDelay)
