@@ -48,7 +48,7 @@ initHitboxes x y l
     | otherwise = (Hitboxes x y l)
 
 -- Indicates if the given (x,y) coordinates are part of the given hitbox 
-partOfHitbox :: Float -> Float -> Hitbox -> Bool
+partOfHitbox :: XCoord -> YCoord -> Hitbox -> Bool
 partOfHitbox x y (Circle xh yh r) = ((x - xh)*(x - xh)) + ((y - yh)*(y - yh)) <= r*r
 partOfHitbox x y (Rectangle xh yh w h) =
     x >= xh &&
@@ -100,12 +100,12 @@ prop_commutativity_collisionHitbox :: Hitbox -> Hitbox -> Bool
 prop_commutativity_collisionHitbox h1 h2 = (collisionHitbox h1 h2 == collisionHitbox h2 h1)
 
 -- Moves a hitbox, depending on x and y components of a vector, given as second argument
-moveHitbox :: Hitbox -> (Float, Float) -> Hitbox
+moveHitbox :: Hitbox -> (XCoord, YCoord) -> Hitbox
 moveHitbox (Circle x y r) (dx,dy) = (initHitboxCircle (x+dx) (y+dy) r)
 moveHitbox (Rectangle x y w h) (dx,dy) = (initHitboxRectangle (x+dx) (y+dy) w h)
 moveHitbox (Hitboxes x y l) (dx,dy) = (initHitboxes (x+dx) (y+dy) (map (\h -> moveHitbox h (dx,dy)) l))
 
-prop_post_moveHitbox :: Hitbox -> (Float, Float) -> Bool
+prop_post_moveHitbox :: Hitbox -> (XCoord, YCoord) -> Bool
 prop_post_moveHitbox hit@(Circle x y r) d@(dx,dy) =
     case (moveHitbox hit d) of
         (Circle x2 y2 r2) -> x2 == x+dx && y2 == y+dy && r2 == r

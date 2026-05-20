@@ -6,13 +6,11 @@ import Graphics.Gloss (Picture)
 
 import System.Random
 
-import qualified Data.Sequence as Seq
 import Data.Foldable (toList)
 
 import GameSetup
 import GameState.Rock
 import Graphics.Assets
-import Objects.Hitbox
 import Objects.Objects
 import Typeclasses.Invariant
 import Typeclasses.Movable
@@ -63,6 +61,48 @@ moveFiniteWall w ss = (fmap (flip move ss) w)
 insideScreenFiniteWall :: (Movable a) => FiniteWall a -> Bool
 insideScreenFiniteWall w = (all insideScreen w)
 
+-- Creates a random finite wall of rocks
+startFiniteWall :: StdGen -> (FiniteWall Rock, StdGen)
+startFiniteWall gen =
+    let 
+
+        -- Maximum 30 rocks inside the generated wall
+        (nbRocks, gen1) = randomR (1::Int, 30) gen
+
+        -- X center of this wall
+        (xCenter, gen2) = randomR ((leftXScreenBound+300)::Float, (rightXScreenBound-300)) gen1
+        leftSide = xCenter <= 0  
+
+        -- Maximum width among all rock assets.
+        maxW = maximum (toList widthRocks)
+
+        -- Maximum allowed horizontal overflow around the X center.
+        overflow = (maxW/2) * 0.6
+        (lowerX, upperX) = (xCenter - overflow, xCenter + overflow)
+
+        -- Starting Y coordinate.
+        baseY = topYScreenBound + 100
+
+        -- Finite sequence of Y coordinates for wall segments (rocks).
+        ys = map (\i -> baseY + fromIntegral i * 15) ([0 .. nbRocks - 1] :: [Int])
+
+        --  Random rock asset indexes
+        randomWalls = randomRs (0, nbRockAssets - 1) gen2
+        -- Random X rock positions, might be outside of the screen
+        randomX = randomRs (lowerX, upperX) gen2
+
+        -- Associates each rock asset index with a random X position.
+        randomValues = zip randomWalls randomX
+    in 
+        (initFiniteWall (zipWith (makeWallObject leftSide) ys randomValues), gen2)
+    where
+        -- Creates an inidvidual rock object, part of the infinite wall
+        -- First argument : left or right sided rock 
+        -- Second argument : Y position
+        -- Third argument : a pair (number of the rock asset index, X position)
+        makeWallObject :: Bool -> YCoord -> (Int, XCoord) -> Rock
+        makeWallObject leftSide y (numRock, x) = startInitRock x y numRock leftSide True
+
 -- ============================================================
 -- ===================== INFINITE WALLS =======================
 -- ============================================================
@@ -96,16 +136,16 @@ initInfiniteWall foreground left gen =
     let 
         -- Maximum width among all rock assets.
         -- Used to compute how far walls may go outside the screen.
-        maxW = maximum (toList widthRockAssets)
+        maxW = maximum (toList widthRocks)
         -- Maximum allowed horizontal overflow outside the screen.
-        overflow = maxW * 0.6
+        overflow = (maxW/2) * 0.6
 
         -- Random X position bounds.
-        -- Left walls slightly overflow on the left side, right walls slightly overflow on the right side.
+        -- Left walls can slightly overflow on the left side, right walls can slightly overflow on the right side.
         (lowerX, upperX) = 
             if left
-                then (leftXScreenBound - overflow, leftXScreenBound)
-                else (rightXScreenBound - maxW, rightXScreenBound - maxW + overflow)
+                then (leftXScreenBound - overflow, leftXScreenBound + overflow)
+                else (rightXScreenBound - overflow, rightXScreenBound + overflow)
 
         -- Starting Y coordinate.
         -- Background walls are vertically offset by half a cell.
@@ -138,23 +178,19 @@ initInfiniteWall foreground left gen =
                 else wall
 
     where
-        -- Creates an inidvidual rock object, port of the infinite wall
+        -- Creates an inidvidual rock object, part of the infinite wall
         -- First argument : Y position
-        -- Sencond argument : a pair (number of the rock asset index, X position)
-        makeWallObject :: Float -> (Int, Float) -> Rock
+        -- Second argument : a pair (number of the rock asset index, X position)
+        makeWallObject :: YCoord -> (Int, XCoord) -> Rock
         makeWallObject y (numRock, x) = 
-            let width = (Seq.index widthRockAssets numRock)
-                height = (Seq.index heightRockAssets numRock)
-                x2 = if left then x else 
+            let x2 = if left then x else 
                     case numRock of -- Offset on right screen side if rocks of width < 90
                         0 -> x
                         1 -> x
                         2 -> x+3
                         3 -> x+6
                         i -> error (show i++" out of bounds")
-                obj = initStaticObject (initHitboxRectangle x2 y width height)
-            in 
-                initRock obj numRock left foreground
+            in startInitRock x2 y numRock left foreground
 
 -- Partially maps an infinite wall : it will apply a function only on a prefix of it
 partialMapWall :: forall a. (a -> a) -> InfiniteWall a -> InfiniteWall a
@@ -248,6 +284,19 @@ insideScreenGameWalls (GameWalls left1 left2 right1 right2 walls) =
     && insideScreen right1
     && insideScreen right2
     && all (all insideScreen) walls
+
+addFiniteWall :: GameWalls -> FiniteWall Rock -> GameWalls
+addFiniteWall (GameWalls leftWall leftWall2 rightWall rightWall2 walls) newWall =
+    initGameWalls leftWall leftWall2 rightWall rightWall2 (walls++[newWall])
+
+prop_pre_addFiniteWall :: GameWalls -> FiniteWall Rock -> Bool
+prop_pre_addFiniteWall _ newWall = length newWall > 0
+
+prop_post_addFiniteWall :: GameWalls -> FiniteWall Rock -> Bool
+prop_post_addFiniteWall gw@(GameWalls leftWall leftWall2 rightWall rightWall2 walls) newWall =
+    let (GameWalls leftWall' leftWall2' rightWall' rightWall2' walls') = addFiniteWall gw newWall
+    in leftWall' == leftWall && leftWall2' == leftWall2 && rightWall' == rightWall && rightWall2' == rightWall2
+        && any (\w -> w == newWall) walls' && length walls' == ((length walls)+1)
 
 -- ============================================================
 -- ==================== WALLS INVARIANT =======================

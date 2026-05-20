@@ -21,18 +21,11 @@ import Keyboard
 renderIO :: Game -> IO Picture
 
 -- Start menu
-renderIO (Game _ (StartMenu option) _ bgnd _) =
+renderIO (Game _ (StartMenu option) ga bgnd _) =
     -- displays information texts
     let subtitle = Translate (-180) (200) (Scale 0.3 0.3 (Color white (Text "An inspiration of ...")))
         title = Translate (-290) (100) (Scale 0.4 0.4 (Color white (Text "XENON 2 : MEGABLAST")))
-        textOption1 = Translate (-43) (0) (Scale 0.3 0.3 (Color white (Text "Start")))
-        textOption2 = Translate (-63) (-100) (Scale 0.3 0.3 (Color white (Text "Option2")))
-        (xSelect1, xSelect2, ySelect) = case option of
-            Start -> (-90, 65, 0)
-            Option2 -> (-110, 90, -100) 
-        select1 = Translate xSelect1 ySelect (Scale 0.3 0.3 (Color white (Text ">")))
-        select2 = Translate xSelect2 ySelect (Scale 0.3 0.3 (Color white (Text "<")))
-    in return (Pictures ((getTranslatedBackgrounds bgnd)++[subtitle, title, textOption1, textOption2, select1, select2]))
+    in return (Pictures ((getTranslatedAssets ga bgnd)++[subtitle, title]++(getTranslatedAssets ga option)))
 
 -- In game
 renderIO (Game _ (InGame igi) assts bgnd _) =
@@ -55,13 +48,27 @@ handleEventsIO :: Event -> Game -> IO Game
 handleEventsIO ev game@(Game kbd (StartMenu option) _ _ counter) = do
     let newKBD = (handleKeyEvent ev kbd) -- keyboard update
 
-    -- if the space bar is pressed on "Start", launches the game
-    if option == Start && (isKeyDown (SpecialKey KeySpace) newKBD)
+        launchPressed = isKeyDown (SpecialKey KeySpace) newKBD || isKeyDown (SpecialKey KeyEnter) newKBD
+
+        keyDownPressed = isKeyDown (SpecialKey KeyDown) newKBD || isKeyDown (Char 's') newKBD || isKeyDown (Char 'S') newKBD
+        keyUpPressed = isKeyDown (SpecialKey KeyUp) newKBD || isKeyDown (Char 'z') newKBD || isKeyDown (Char 'Z') newKBD
+                        || isKeyDown (Char 'w') newKBD || isKeyDown (Char 'W') newKBD -- QWERTY friendly
+
+    -- if the space or enter key is pressed on "1 Player", launches the game with one player
+    if option == OnePlayer && launchPressed
         then do
             gen <- newStdGen
             return game{
                 keyboard = initKeyboard,
-                state = startInitInGame gen 0 0 0 0
+                state = startInitInGame gen 1
+                }
+    -- if the space or enter key is pressed on "2 Players", launches the game with two players
+    else if option == TwoPlayers && launchPressed
+        then do
+            gen <- newStdGen
+            return game{
+                keyboard = initKeyboard,
+                state = startInitInGame gen 2
                 }
         else 
             if isKeyDown (SpecialKey KeyEsc) newKBD
@@ -69,10 +76,10 @@ handleEventsIO ev game@(Game kbd (StartMenu option) _ _ counter) = do
                     putStrLn "Exiting..."
                     error "EXIT"
                 else
-                    case (isKeyDown (SpecialKey KeyUp) newKBD, isKeyDown (SpecialKey KeyDown) newKBD, option) of
+                    case (keyUpPressed, keyDownPressed, option) of
                     (True, True, _) -> return game{keyboard = newKBD}
-                    (_, True, Start) -> return game{keyboard = newKBD, state = (initStartMenu Option2)}
-                    (True, _, Option2) -> return game{keyboard = newKBD, state = (initStartMenu Start)}
+                    (_, True, OnePlayer) -> return game{keyboard = newKBD, state = (initStartMenu TwoPlayers)}
+                    (True, _, TwoPlayers) -> return game{keyboard = newKBD, state = (initStartMenu OnePlayer)}
                     _ -> return game{keyboard = newKBD}
 
 -- In game
@@ -82,7 +89,7 @@ handleEventsIO ev game@(Game kbd (InGame (InGameInfos ss p1 p2 enemies walls pro
 
     -- if the "Escape" key is pressed while in game, we're back to the start menu
     if (isKeyDown (SpecialKey KeyEsc) newKBD)
-        then return game{keyboard = initKeyboard, state = (initStartMenu Start)}
+        then return game{keyboard = initKeyboard, state = (initStartMenu OnePlayer)}
         else  
             -- if the "Space" key is pressed while in game, player1 SHOOOT
             if (isKeyDown (SpecialKey KeySpace) newKBD)
@@ -92,6 +99,15 @@ handleEventsIO ev game@(Game kbd (InGame (InGameInfos ss p1 p2 enemies walls pro
                         let newProjectiles = shot : projectiles
                             newIgi = initInGameInfos ss p1 p2 enemies walls newProjectiles expl
                         in return game{keyboard = newKBD, state = (InGame newIgi)}
+            -- if the "ENTER" key is pressed while in game, player2 SHOOOT
+            else if (isKeyDown (SpecialKey KeyEnter) newKBD)
+                then case playerShot p2 of
+                    Nothing -> return game{keyboard = newKBD}
+                    Just shot -> 
+                        let newProjectiles = shot : projectiles
+                            newIgi = initInGameInfos ss p1 p2 enemies walls newProjectiles expl
+                        in return game{keyboard = newKBD, state = (InGame newIgi)}
+                
                 else return game{keyboard = newKBD}
 
 -- Updating

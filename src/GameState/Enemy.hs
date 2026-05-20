@@ -75,22 +75,13 @@ loopEnemyHitbox x y =
             initHitboxRectangle (x-5) (y-49) 10 (height-1)
         ]
 
-placeEnemy :: Float -> Float -> Enemy
-placeEnemy x y =
-    let eo = (initMovableObject (loopEnemyHitbox x y) (initDirection 0 0) (initObjectSpeed 0))
-    in (initEnemy eo 
-        noMoveButBiteEnemyHealth 
-        noMoveButBiteEnemyCollisionDamage 
-        noMoveButBiteEnemyScore 
-        startInitNoMoveButBoomEnemyScript)
-
 startInitNoMoveButBoomEnemy :: Float -> Float -> Enemy
 startInitNoMoveButBoomEnemy x y =
     let eo = (initStaticObject (noMoveButBoomEnemyHitbox x y))
     in (initEnemy eo 
-        noMoveButBiteEnemyHealth 
-        noMoveButBiteEnemyCollisionDamage 
-        noMoveButBiteEnemyScore 
+        noMoveButBoomEnemyHealth 
+        noMoveButBoomEnemyCollisionDamage 
+        noMoveButBoomEnemyScore 
         startInitNoMoveButBoomEnemyScript)
 
 startInitLeftRightShootEnemy :: Float -> Float -> Float -> Float -> Enemy
@@ -557,11 +548,10 @@ instance Renderable Enemy where
 getTranslatedEnemyAsset :: GameAssets -> Enemy -> [Picture]
 getTranslatedEnemyAsset ga (Enemy eo _ _ _ script) = 
     let (ex, ey) = centerHitbox (objectHitbox eo)
-        h = objectHitbox eo
     in case script of
-        (NoMoveButBoomEnemy) -> [Translate ex ey (Seq.index (enemiesPics ga) 0)]-- ++ (translateHitbox h)
-        (LeftRightShootEnemy _ _ _) -> [Translate ex ey (Seq.index (enemiesPics ga) 1)]-- ++ (translateHitbox h)
-        (LoopEnemy _ _ _ _ _ _ _ _ _) -> [Translate ex ey (Seq.index (enemiesPics ga) 2)]-- ++ (translateHitbox h)
+        (NoMoveButBoomEnemy) -> [Translate ex ey (Seq.index (enemiesPics ga) 0)]
+        (LeftRightShootEnemy _ _ _) -> [Translate ex ey (Seq.index (enemiesPics ga) 1)]
+        (LoopEnemy _ _ _ _ _ _ _ _ _) -> [Translate ex ey (Seq.index (enemiesPics ga) 2)]
 
 -- ============================================================
 -- ===================== ENEMY MOVABLE =======================

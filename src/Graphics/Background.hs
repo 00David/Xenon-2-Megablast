@@ -15,7 +15,7 @@ heightBackgroundPicture = 1100
 data Background = Background{
     backgroundPicture :: Picture, 
     backgroundScrollingSpeed :: Float,
-    backgroundY :: Float
+    backgroundY :: YCoord
 } deriving (Eq, Show)
 
 -- Ensures that background pictures always cover entirely screen height, by having y part of [0, heightBackgroundPicture[
@@ -27,7 +27,7 @@ initStartBackground = do
     bgnd <- loadPNG "./assets/Starfield.png"
     return (Background bgnd backgroundDefaultScrollingSpeed 0)
 
-initBackground :: Picture -> Float -> Float -> Background
+initBackground :: Picture -> Float -> YCoord -> Background
 initBackground pic scrollingSpeed bgndY = 
     (Background pic scrollingSpeed bgndY)
 

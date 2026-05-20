@@ -30,17 +30,17 @@ prop_inv_projectile (PlayerShot po sI d pId) = prop_inv_object po && sI == 0 && 
     && (pId == 1 || pId == 2)
 prop_inv_projectile (EnemyShot po sI d) = prop_inv_object po && (sI == 0 || sI == 1) && d >= 1
 
-playerShotObject :: Direction -> ObjectSpeed -> Float -> Float -> ProjectileAsset-> Object
+playerShotObject :: Direction -> ObjectSpeed -> XCoord -> YCoord -> ProjectileAsset-> Object
 playerShotObject dir os x y asset = 
     let h = (initHitboxCircle x y (((Seq.index widthPlayerShotAssets asset)+(Seq.index heightPlayerShotAssets asset))/4.0))
         in (initMovableObject h dir os)
 
-prop_pre_playerShotObject :: Direction -> ObjectSpeed -> Float -> Float -> ProjectileAsset-> Bool
+prop_pre_playerShotObject :: Direction -> ObjectSpeed -> XCoord -> YCoord -> ProjectileAsset-> Bool
 prop_pre_playerShotObject _ _ _ _ asset
     | asset >= 0 && asset <= (nbPlayerShotAssets-1) = True
     | otherwise = False
 
-enemyShotObject :: Direction -> ObjectSpeed -> Float -> Float -> ProjectileAsset -> Object
+enemyShotObject :: Direction -> ObjectSpeed -> XCoord -> YCoord -> ProjectileAsset -> Object
 enemyShotObject dir os x y asset
     | asset == 0 = 
         let r = ((Seq.index widthEnemyShotAssets asset)
@@ -56,7 +56,7 @@ enemyShotObject dir os x y asset
         in initMovableObject h dir os
     | otherwise = error "unknown enemy shot asset"
 
-prop_pre_enemyShotObject :: Direction -> ObjectSpeed -> Float -> Float -> ProjectileAsset-> Bool
+prop_pre_enemyShotObject :: Direction -> ObjectSpeed -> XCoord -> YCoord -> ProjectileAsset-> Bool
 prop_pre_enemyShotObject _ _ _ _ asset
     | asset >= 0 && asset <= (nbEnemyShotAssets-1) = True
     | otherwise = False

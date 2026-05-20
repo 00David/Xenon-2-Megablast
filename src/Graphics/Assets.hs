@@ -46,6 +46,8 @@ data GameAssets = GameAssets {
     p2Pic :: Picture,
     p1ExplosionPics :: Seq Picture,
     p2ExplosionPics :: Seq Picture,
+    pDamagedPic :: Picture,
+    pInvinciblePic :: Picture,
     pBoosterPics :: Seq Picture,
     -- enemies
     enemiesPics :: Seq Picture,
@@ -73,6 +75,8 @@ initGameAssets = do
     p2 <- loadPNG "./assets/spaceship/player2/spaceship.png"
     p1Explosions <- initPlayerExplosionAssets True
     p2Explosions <- initPlayerExplosionAssets False
+    pDamaged <- loadPNG "./assets/spaceship/spaceship_damaged.png"
+    pInvincible <- loadPNG "./assets/spaceship/spaceship_invincible.png"
     boosters <- initBoosterAssets
     enemies <- initEnemiesAssets
     bottomLeft <- loadPNG "./assets/bottom_score/bottom_left_bar.png"
@@ -87,7 +91,7 @@ initGameAssets = do
     p2Shots <- initPlayerShotAssets False
     eShots <- initEnemyShotAssets
     hits <- initHitAssets
-    return $ GameAssets p1 p2 p1Explosions p2Explosions boosters enemies
+    return $ GameAssets p1 p2 p1Explosions p2Explosions pDamaged pInvincible boosters enemies
         bottomLeft bottomBar bottomRight ds p1Health p2Health leftWalls rightWalls 
         p1Shots p2Shots eShots hits
 

@@ -13,10 +13,10 @@ import Objects.Hitbox
 import Typeclasses.Invariant
 
 data Explosion = Explosion {
-    explosionX :: Float, -- X center of the explosion
-    explosionY :: Float, -- Y center of the explosion
-    explosionPhaseCounter :: FrameCounter, -- frame counter of the current explosion phase, inside of [1, 10]
-    explosionPhase :: ExplosionAnim -- the current explosion phase (= explosion animation), inside of [0, 6]
+    explosionX :: XCoord, -- X center of the explosion
+    explosionY :: YCoord, -- Y center of the explosion
+    explosionPhaseCounter :: FrameCounter, -- frame counter of the current explosion phase, inside of [1, nbFramesPerExplosionPhase]
+    explosionPhase :: AnimationPhase -- the current explosion phase (= explosion animation), inside of [0, nbHitAssets-1]
 } deriving (Show, Eq)
 
 prop_inv_explosion :: Explosion -> Bool
@@ -24,13 +24,13 @@ prop_inv_explosion (Explosion _ _ cpt phase) =
     cpt >= 1 && cpt <= nbFramesPerExplosionPhase
     && phase >= 0 && phase <= (nbHitAssets-1)
 
-initExplosion :: Float -> Float -> FrameCounter -> ExplosionAnim -> Explosion
+initExplosion :: XCoord -> YCoord -> FrameCounter -> AnimationPhase -> Explosion
 initExplosion x y cpt phase
     | cpt < 1 || cpt > nbFramesPerExplosionPhase = error "invalid explosion frames counter"
     | phase < 0 || phase > (nbHitAssets-1) = error "invalid number of explosion phase"
     | otherwise = (Explosion x y cpt phase)
 
-startInitExplosion :: Float -> Float -> Explosion
+startInitExplosion :: XCoord -> YCoord -> Explosion
 startInitExplosion x y = (initExplosion x y 1 0) -- frame counter at 1, explosion phase at 0
 
 -- Run the explosion animation : either returns the updated explosion animation, or Nothing if it has finished
