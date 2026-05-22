@@ -26,6 +26,7 @@ source-repository head
 library
   exposed-modules:
       GameSetup
+      GameState.Bonus
       GameState.Enemy
       GameState.Game
       GameState.Player

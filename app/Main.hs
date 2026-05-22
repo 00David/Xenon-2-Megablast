@@ -7,10 +7,7 @@ import Graphics.Gloss.Interface.IO.Game
 import System.Random
 import qualified Control.Monad.State as St
 
-import Debug.Trace
-
 import GameSetup
-import GameState.Enemy
 import GameState.Game
 import GameState.Player
 import Graphics.Assets
@@ -28,15 +25,15 @@ renderIO (Game _ (StartMenu option) ga bgnd _) =
     in return (Pictures ((getTranslatedAssets ga bgnd)++[subtitle, title]++(getTranslatedAssets ga option)))
 
 -- In game
-renderIO (Game _ (InGame igi) assts bgnd _) =
+renderIO (Game _ (InGame igi) ga bgnd _) =
     let
         player1 = (gamePlayer1 igi)
         player2 = (gamePlayer2 igi)
     in
         return (Pictures (
-            (getTranslatedAssets assts bgnd) ++
-            (getTranslatedAssets assts igi) ++
-            (getTranslatedBottomBar assts 
+            (getTranslatedAssets ga bgnd) ++
+            (getTranslatedAssets ga igi) ++
+            (getTranslatedBottomBar ga 
                     (playerScore player1) (playerHealth player1) (playerLifes player1)
                     (playerScore player2) (playerHealth player2) (playerLifes player2))
             ))  
@@ -45,7 +42,7 @@ renderIO (Game _ (InGame igi) assts bgnd _) =
 handleEventsIO :: Event -> Game -> IO Game
 
 -- Start menu
-handleEventsIO ev game@(Game kbd (StartMenu option) _ _ counter) = do
+handleEventsIO ev (Game kbd gs@(StartMenu option) ga bgnd nbFrames) = do
     let newKBD = (handleKeyEvent ev kbd) -- keyboard update
 
         launchPressed = isKeyDown (SpecialKey KeySpace) newKBD || isKeyDown (SpecialKey KeyEnter) newKBD
@@ -58,18 +55,12 @@ handleEventsIO ev game@(Game kbd (StartMenu option) _ _ counter) = do
     if option == OnePlayer && launchPressed
         then do
             gen <- newStdGen
-            return game{
-                keyboard = initKeyboard,
-                state = startInitInGame gen 1
-                }
+            return (initGame (initKeyboard) (startInitInGame gen 1) ga bgnd nbFrames)
     -- if the space or enter key is pressed on "2 Players", launches the game with two players
     else if option == TwoPlayers && launchPressed
         then do
             gen <- newStdGen
-            return game{
-                keyboard = initKeyboard,
-                state = startInitInGame gen 2
-                }
+            return (initGame (initKeyboard) (startInitInGame gen 2) ga bgnd nbFrames)
         else 
             if isKeyDown (SpecialKey KeyEsc) newKBD
                 then do
@@ -77,13 +68,13 @@ handleEventsIO ev game@(Game kbd (StartMenu option) _ _ counter) = do
                     error "EXIT"
                 else
                     case (keyUpPressed, keyDownPressed, option) of
-                    (True, True, _) -> return game{keyboard = newKBD}
-                    (_, True, OnePlayer) -> return game{keyboard = newKBD, state = (initStartMenu TwoPlayers)}
-                    (True, _, TwoPlayers) -> return game{keyboard = newKBD, state = (initStartMenu OnePlayer)}
-                    _ -> return game{keyboard = newKBD}
+                    (True, True, _) -> return (initGame (newKBD) gs ga bgnd nbFrames)
+                    (_, True, OnePlayer) -> return (initGame (newKBD) (initStartMenu TwoPlayers) ga bgnd nbFrames)
+                    (True, _, TwoPlayers) -> return (initGame (newKBD) (initStartMenu OnePlayer) ga bgnd nbFrames)
+                    _ -> return (initGame (newKBD) gs ga bgnd nbFrames)
 
 -- In game
-handleEventsIO ev game@(Game kbd (InGame (InGameInfos ss p1 p2 enemies walls projectiles expl)) _ _ _) = do
+handleEventsIO ev game@(Game kbd gs@(InGame (InGameInfos ss p1 p2 enemies walls projectiles expl bns)) ga bgnd nbFrames) = do
     -- trace ("event received: " <> show ev) 
     let newKBD = (handleKeyEvent ev kbd) -- keyboard update
 
@@ -91,24 +82,53 @@ handleEventsIO ev game@(Game kbd (InGame (InGameInfos ss p1 p2 enemies walls pro
     if (isKeyDown (SpecialKey KeyEsc) newKBD)
         then return game{keyboard = initKeyboard, state = (initStartMenu OnePlayer)}
         else  
-            -- if the "Space" key is pressed while in game, player1 SHOOOT
-            if (isKeyDown (SpecialKey KeySpace) newKBD)
-                then case playerShot p1 of
-                    Nothing -> return game{keyboard = newKBD}
-                    Just shot -> 
-                        let newProjectiles = shot : projectiles
-                            newIgi = initInGameInfos ss p1 p2 enemies walls newProjectiles expl
-                        in return game{keyboard = newKBD, state = (InGame newIgi)}
-            -- if the "ENTER" key is pressed while in game, player2 SHOOOT
-            else if (isKeyDown (SpecialKey KeyEnter) newKBD)
-                then case playerShot p2 of
-                    Nothing -> return game{keyboard = newKBD}
-                    Just shot -> 
-                        let newProjectiles = shot : projectiles
-                            newIgi = initInGameInfos ss p1 p2 enemies walls newProjectiles expl
-                        in return game{keyboard = newKBD, state = (InGame newIgi)}
-                
-                else return game{keyboard = newKBD}
+            -- if BOTH "Space" and "Enter" are pressed, both players SHOOOT (if possible)
+            if isKeyDown (SpecialKey KeySpace) newKBD &&
+                    isKeyDown (SpecialKey KeyEnter) newKBD
+                then
+                    case (playerShot p1, playerShot p2) of
+                        ((Just shot1, newP1), (Just shot2, newP2)) ->
+                            let newProjectiles = shot1 : shot2 : projectiles
+                                newIgi = initInGameInfos ss newP1 newP2 enemies walls newProjectiles expl bns
+                            in return (initGame newKBD (initInGame newIgi) ga bgnd nbFrames)
+                        ((Just shot1, newP1), (Nothing, newP2)) ->
+                            let newProjectiles = shot1 : projectiles
+                                newIgi = initInGameInfos ss newP1 newP2 enemies walls newProjectiles expl bns
+                            in return (initGame newKBD (initInGame newIgi) ga bgnd nbFrames)
+                        ((Nothing, newP1), (Just shot2, newP2)) ->
+                            let newProjectiles = shot2 : projectiles
+                                newIgi = initInGameInfos ss newP1 newP2 enemies walls newProjectiles expl bns
+                            in return (initGame newKBD (initInGame newIgi) ga bgnd nbFrames)
+                        ((Nothing, newP1), (Nothing, newP2)) ->
+                            let newIgi = initInGameInfos ss newP1 newP2 enemies walls projectiles expl bns
+                            in return (initGame newKBD (initInGame newIgi) ga bgnd nbFrames)
+
+            -- if the "Space" key is pressed while in game, player1 SHOOOT (if possible)
+            else if isKeyDown (SpecialKey KeySpace) newKBD
+                then
+                    case playerShot p1 of
+                        (Nothing, newP1) ->
+                            let newIgi = initInGameInfos ss newP1 p2 enemies walls projectiles expl bns
+                            in return (initGame newKBD (initInGame newIgi) ga bgnd nbFrames)
+                        (Just shot, newP1) ->
+                            let newProjectiles = shot : projectiles
+                                newIgi = initInGameInfos ss newP1 p2 enemies walls newProjectiles expl bns
+                            in return (initGame newKBD (initInGame newIgi) ga bgnd nbFrames)
+
+            -- if the "ENTER" key is pressed while in game, player2 SHOOOT (if possible)
+            else if isKeyDown (SpecialKey KeyEnter) newKBD
+                then
+                    case playerShot p2 of
+                        (Nothing, newP2) ->
+                            let newIgi = initInGameInfos ss p1 newP2 enemies walls projectiles expl bns
+                            in return (initGame newKBD (initInGame newIgi) ga bgnd nbFrames)
+                        (Just shot, newP2) ->
+                            let newProjectiles = shot : projectiles
+                                newIgi = initInGameInfos ss p1 newP2 enemies walls newProjectiles expl bns
+                            in return (initGame newKBD (initInGame newIgi) ga bgnd nbFrames)
+
+            else
+                return (initGame newKBD gs ga bgnd nbFrames)
 
 -- Updating
 updateIO :: Float -> Game -> IO Game
@@ -117,19 +137,19 @@ updateIO :: Float -> Game -> IO Game
 updateIO _ game@(Game _ (StartMenu _) _ _ _) = return game 
 
 -- In game
-updateIO deltaTime game@(Game kbd (InGame ig1@(InGameInfos _ _ _ _ _ _ _)) _ bgnd counter) = do 
+updateIO deltaTime (Game kbd (InGame ig1@(InGameInfos _ _ _ _ _ _ _ _)) ga bgnd nbFrames) = do 
     gen <- newStdGen
     let 
         -- Background update
         newBgnd = updateBackground deltaTime bgnd
 
         -- In game informations update
-        (_, ig2) = St.runState (updateInGame counter gen kbd deltaTime) ig1
+        (_, ig2) = St.runState (updateInGame nbFrames gen kbd deltaTime) ig1
 
         -- Counter update
-        newCounter = (counter + 1) `mod` maxFramesToConsider
+        newNbFrames = (nbFrames + 1) `mod` maxFramesToConsider
 
-    return game{state = (InGame ig2), background = newBgnd, frameCounter = newCounter}
+    return (initGame kbd (initInGame ig2) ga (newBgnd) (newNbFrames))
 
 -- Game loop
 main :: IO ()

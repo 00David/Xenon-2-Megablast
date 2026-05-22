@@ -118,13 +118,7 @@ enemyShot (Enemy eo _ _ _ script) =
         (LeftRightShootEnemy _ _ shootD) -> 
             if shootD == 1 
                 then 
-                    let 
-                        dir = (initDirection 0 (-1))
-                        s = initObjectSpeed leftRightShootEnemyShotSpeed
-                        assetIndex = 0
-                        projO = (enemyShotObject dir s x (y-50) assetIndex)
-                    in Just (initEnemyShot projO assetIndex 
-                        leftRightShootEnemyShotDamage)
+                    Just (startInitEnemyShot x (y-50) (initObjectSpeed leftRightShootEnemyShotSpeed) 0 (leftRightShootEnemyShotDamage))
                 else
                     Nothing
         _ -> Nothing
@@ -544,7 +538,7 @@ instance Renderable Enemy where
     getTranslatedAssets :: GameAssets -> Enemy -> [Picture]
     getTranslatedAssets ga enemy = getTranslatedEnemyAsset ga enemy
 
--- Returns a list of translated enemy assets.
+-- Returns a list of translated enemy assets (only one).
 getTranslatedEnemyAsset :: GameAssets -> Enemy -> [Picture]
 getTranslatedEnemyAsset ga (Enemy eo _ _ _ script) = 
     let (ex, ey) = centerHitbox (objectHitbox eo)

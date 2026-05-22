@@ -42,6 +42,9 @@ maxEnemies = 20
 generateWallInterval :: FrameCounter
 generateWallInterval = 600 -- in number of frames <=> 10s
 
+bonusDropChance :: Float
+bonusDropChance = 0.1 -- inside of [0, 1]
+
 -- ============================================================
 -- ========================= ASSETS ===========================
 -- ============================================================
@@ -76,7 +79,7 @@ heightEnemyShotAssets :: Seq Float
 heightEnemyShotAssets = fromList [32, 32]
 
 nbEnemyShotAssets :: Int
-nbEnemyShotAssets = 2
+nbEnemyShotAssets = 1
 
 widthPlayer :: Float
 widthPlayer = 110
@@ -87,12 +90,12 @@ nbPlayerExplosionAssets :: Int
 nbPlayerExplosionAssets = 6
 
 widthPlayerShotAssets :: Seq Float
-widthPlayerShotAssets = fromList [16]
+widthPlayerShotAssets = fromList [16, 32]
 heightPlayerShotAssets :: Seq Float
-heightPlayerShotAssets = fromList [16]
+heightPlayerShotAssets = fromList [16, 32]
 
 nbPlayerShotAssets :: Int
-nbPlayerShotAssets = 1
+nbPlayerShotAssets = 2
 
 widthRocks :: Seq Float
 widthRocks = fromList [90, 90, 87, 84]
@@ -108,6 +111,16 @@ rockCell = index heightRocks 0
 
 nbHitAssets :: Int
 nbHitAssets = 7
+
+widthBonus :: Float
+widthBonus = 16
+heightBonus :: Float
+heightBonus = 16
+radiusBonus :: Float
+radiusBonus = (widthBonus + heightBonus) / 4.0
+
+nbPlayerBonusAssets :: Int
+nbPlayerBonusAssets = 4
 
 -- ============================================================
 -- ========================= SPEEDS ===========================
@@ -148,11 +161,20 @@ player2StartY = 0
 playerDefaultShootDelay :: ShootDelay
 playerDefaultShootDelay = 60 -- in frames / second
 
+playerBonusShootDelay :: ShootDelay
+playerBonusShootDelay = 20 -- in frames / second
+
 playerDefaultShotSpeed :: Float
 playerDefaultShotSpeed = 6
 
+playerBonusShotSpeed :: Float
+playerBonusShotSpeed = 3*playerDefaultShotSpeed
+
 playerDefaultShotDamage :: Damage
 playerDefaultShotDamage = 1
+
+playerBonusShotDamage :: Damage
+playerBonusShotDamage = 3*playerDefaultShotDamage
 
 -- ============================================================
 -- ======================== ENEMIES ===========================

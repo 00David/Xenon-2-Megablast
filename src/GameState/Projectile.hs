@@ -26,35 +26,9 @@ data Projectile =
     deriving (Eq, Show)
 
 prop_inv_projectile :: Projectile -> Bool
-prop_inv_projectile (PlayerShot po sI d pId) = prop_inv_object po && sI == 0 && d >= 1
+prop_inv_projectile (PlayerShot po sI d pId) = prop_inv_object po && (sI >= 0 && sI <= (nbPlayerShotAssets-1)) && d >= 1
     && (pId == 1 || pId == 2)
-prop_inv_projectile (EnemyShot po sI d) = prop_inv_object po && (sI == 0 || sI == 1) && d >= 1
-
-playerShotObject :: Direction -> ObjectSpeed -> XCoord -> YCoord -> ProjectileAsset-> Object
-playerShotObject dir os x y asset = 
-    let h = (initHitboxCircle x y (((Seq.index widthPlayerShotAssets asset)+(Seq.index heightPlayerShotAssets asset))/4.0))
-        in (initMovableObject h dir os)
-
-prop_pre_playerShotObject :: Direction -> ObjectSpeed -> XCoord -> YCoord -> ProjectileAsset-> Bool
-prop_pre_playerShotObject _ _ _ _ asset
-    | asset >= 0 && asset <= (nbPlayerShotAssets-1) = True
-    | otherwise = False
-
-enemyShotObject :: Direction -> ObjectSpeed -> XCoord -> YCoord -> ProjectileAsset -> Object
-enemyShotObject dir os x y asset
-    | asset == 0 = 
-        let r = ((Seq.index widthEnemyShotAssets asset)
-              + (Seq.index heightEnemyShotAssets asset)) / 4.0
-            h = initHitboxCircle x y r
-        in initMovableObject h dir os
-    | asset == 1 =
-        let w = Seq.index widthEnemyShotAssets asset
-            hgt = Seq.index heightEnemyShotAssets asset
-            xBL = x - (w / 2)
-            yBL = y - (hgt / 2)
-            h = initHitboxRectangle xBL yBL w hgt
-        in initMovableObject h dir os
-    | otherwise = error "unknown enemy shot asset"
+prop_inv_projectile (EnemyShot po sI d) = prop_inv_object po && (sI >= 0 && sI <= (nbEnemyShotAssets-1)) && d >= 1
 
 prop_pre_enemyShotObject :: Direction -> ObjectSpeed -> XCoord -> YCoord -> ProjectileAsset-> Bool
 prop_pre_enemyShotObject _ _ _ _ asset
@@ -68,11 +42,31 @@ initPlayerShot po asset d pId
     | not (pId == 1 || pId == 2) = error "invalid player id"
     | otherwise = PlayerShot po asset d pId
 
+startInitPlayerShot :: XCoord -> YCoord -> ObjectSpeed -> ProjectileAsset -> Damage -> PlayerId -> Projectile
+startInitPlayerShot x y os asset d pId =
+    let 
+        h = (initHitboxCircle x y (((Seq.index widthPlayerShotAssets asset) + (Seq.index heightPlayerShotAssets asset))/4.0))
+        projO = (initMovableObject h (initDirection 0 1) os)
+    in (initPlayerShot projO asset d pId)
+
+prop_pre_startInitPlayerShot :: XCoord -> YCoord -> ObjectSpeed -> ProjectileAsset -> Damage -> PlayerId -> Bool
+prop_pre_startInitPlayerShot _ _ _ asset d pId = asset >= 0 && asset <= (nbPlayerShotAssets-1) && d > 0 && (pId == 1 || pId == 2)
+
 initEnemyShot :: Object -> ProjectileAsset -> Damage -> Projectile
 initEnemyShot po asset d
     | not (asset >= 0 && asset <= (nbEnemyShotAssets-1)) = error "invalid asset index"
     | d < 1 = error "damage must be >= 1"
     | otherwise = EnemyShot po asset d
+
+startInitEnemyShot :: XCoord -> YCoord -> ObjectSpeed -> ProjectileAsset -> Damage -> Projectile
+startInitEnemyShot x y os asset d =
+    let 
+        h = (initHitboxCircle x y (((Seq.index widthEnemyShotAssets asset) + (Seq.index heightEnemyShotAssets asset)) / 4.0))
+        projO = (initMovableObject h (initDirection 0 (-1)) os)
+    in (initEnemyShot projO asset d)
+
+prop_pre_startInitEnemyShot :: XCoord -> YCoord -> ObjectSpeed -> ProjectileAsset -> Damage -> Bool
+prop_pre_startInitEnemyShot _ _ _ asset d = asset >= 0 && asset <= (nbEnemyShotAssets-1) && d > 0
 
 projectileObject :: Projectile -> Object
 projectileObject (PlayerShot obj _ _ _) = obj

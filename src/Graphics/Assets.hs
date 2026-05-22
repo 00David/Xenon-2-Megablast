@@ -66,7 +66,9 @@ data GameAssets = GameAssets {
     player2ShotPics :: Seq Picture,
     enemyShotPics :: Seq Picture,
     -- hit explosions
-    hitPics :: Seq Picture
+    hitPics :: Seq Picture,
+    -- bonus
+    playerShootBonusPics :: Seq Picture
 } deriving Show
 
 initGameAssets :: IO GameAssets
@@ -91,9 +93,10 @@ initGameAssets = do
     p2Shots <- initPlayerShotAssets False
     eShots <- initEnemyShotAssets
     hits <- initHitAssets
+    pShootBonus <- initPlayerShootBonusAssets
     return $ GameAssets p1 p2 p1Explosions p2Explosions pDamaged pInvincible boosters enemies
         bottomLeft bottomBar bottomRight ds p1Health p2Health leftWalls rightWalls 
-        p1Shots p2Shots eShots hits
+        p1Shots p2Shots eShots hits pShootBonus
 
 -- Translates a hitbox into its visible borders, for debug purpose
 translateHitbox :: Hitbox -> [Picture]
@@ -358,3 +361,17 @@ initHitAssets :: IO (Seq Picture)
 initHitAssets = do
     hits <- sequence [loadPNG ("./assets/hit/expl" ++ show n ++ ".png") | n <- [0..(nbHitAssets-1) :: Int]]
     return (Seq.fromList hits)
+
+-- ============================================================
+-- =============== PLAYER SHOOT BONUS ASSETS ==================
+-- ============================================================
+
+initPlayerShootBonusAssets :: IO (Seq Picture)
+initPlayerShootBonusAssets = do
+    shootBonuses <- sequence [
+            loadPNG ("./assets/bonuses/shootFaster.png"),
+            loadPNG ("./assets/bonuses/delayDecreased.png"),
+            loadPNG ("./assets/bonuses/moreDamages.png"),
+            loadPNG ("./assets/bonuses/biggerShots.png")
+        ]
+    return (Seq.fromList shootBonuses)

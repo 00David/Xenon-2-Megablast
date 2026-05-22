@@ -157,7 +157,7 @@ instance Renderable Rock where
     getTranslatedAssets :: GameAssets -> Rock -> [Picture]
     getTranslatedAssets ga rock = getTranslatedRockAsset ga rock
 
--- Returns a list of translated rock assets.
+-- Returns a list of translated rock assets (only one).
 getTranslatedRockAsset :: GameAssets -> Rock -> [Picture]
 getTranslatedRockAsset ga (LeftRock ro sprite _) = 
     let rockPic = Seq.index (leftWallPics ga) sprite
