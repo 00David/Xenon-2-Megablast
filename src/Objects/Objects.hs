@@ -20,12 +20,15 @@ class (Movable a) => Collidable a where
     -- Detects if there is a collision after moving a. Float is the scrolling speed
     willCollide :: Collidable b => a -> b -> ScreenScrollingSpeed -> Bool
 
+-- An object must always collide with itself.
 law_collidable_reflexive :: Collidable a => a -> Bool
 law_collidable_reflexive x = collision x x
 
+-- Collision detection must be independent of argument order.
 law_collidable_symmetric :: (Collidable a, Collidable b) => a -> b -> Bool
 law_collidable_symmetric x y = collision x y == collision y x
 
+-- Future collision prediction must match collision after movement.
 law_collidable_will_collide :: Collidable a => Collidable b => a -> b -> ScreenScrollingSpeed -> Bool
 law_collidable_will_collide x y s = willCollide x y s == collision (move x s) y
 
@@ -178,6 +181,5 @@ instance Collidable Object where
 
     willCollide :: Collidable b => Object -> b -> ScreenScrollingSpeed -> Bool  
     willCollide obj other screenSpeed =
-        let objs2 = getObjects other
-            movedObj = moveObject obj screenSpeed
-        in any (\o2 -> collisionObject movedObj o2) objs2
+        let objMoved = move obj screenSpeed
+        in collision objMoved other

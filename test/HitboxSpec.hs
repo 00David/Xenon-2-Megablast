@@ -33,17 +33,23 @@ spec = do
 -- ====================== OBJECT HITBOXES =====================
 -- ============================================================
 
--- Initializes Hitboxes veryfing their invariant
-newtype TestHitbox = TestHitbox { getHitbox :: Hitbox } deriving (Eq, Show)
-instance Arbitrary TestHitbox where
-    arbitrary :: Gen TestHitbox
-    arbitrary = oneof
-        [ TestHitbox <$> (Circle <$> arbitrary <*> arbitrary <*> (abs <$> arbitrary)) -- radius >= 0
-        , TestHitbox <$> (Rectangle <$> arbitrary <*> arbitrary <*> (getPositive <$> arbitrary) <*> (getPositive <$> arbitrary)) -- width > 0 && heigth > 0
-        , TestHitbox <$> genValidHitboxes] -- verifies Hitboxes invariants
+genCircle :: Gen Hitbox
+genCircle = do
+    x <- arbitrary
+    y <- arbitrary
+    radius <- (abs <$> arbitrary) -- radius >= 0
+    return (Circle x y radius)
 
-genValidHitboxes :: Gen Hitbox
-genValidHitboxes = do
+genRectangle :: Gen Hitbox
+genRectangle = do
+    xBottomLeft <- arbitrary 
+    yBottomLeft <- arbitrary
+    width <- (getPositive <$> arbitrary) -- width > 0
+    heigth <- (getPositive <$> arbitrary) -- heigth > 0
+    return (Rectangle xBottomLeft yBottomLeft width heigth)
+
+genHitboxes :: Gen Hitbox
+genHitboxes = do
     x <- arbitrary
     y <- arbitrary
 
@@ -59,6 +65,15 @@ genValidHitboxes = do
                 , Rectangle <$> arbitrary <*> arbitrary <*> (getPositive <$> arbitrary) <*> (getPositive <$> arbitrary)] -- width > 0 && heigth > 0
     rest <- vectorOf n genAtomic
     return (Hitboxes x y (base : rest))
+
+-- Initializes Hitboxes veryfing their invariant
+newtype TestHitbox = TestHitbox { getHitbox :: Hitbox } deriving (Eq, Show)
+instance Arbitrary TestHitbox where
+    arbitrary :: Gen TestHitbox
+    arbitrary = oneof
+        [ TestHitbox <$> genCircle
+        , TestHitbox <$> genRectangle 
+        , TestHitbox <$> genHitboxes]
 
 prop_initHitboxCircle_preservesInvariant :: XCenter -> YCenter -> Radius -> Property
 prop_initHitboxCircle_preservesInvariant x y r =
@@ -332,12 +347,10 @@ invariantLawsSpec = do
 
         it "law_invariant_stable" $
             property (
-                \(TestHitbox h) ->
-                    law_invariant_stable h
+                \(TestHitbox h) -> law_invariant_stable h
             )
 
         it "law_invariant_idempotent" $
             property (
-                \(TestHitbox h) ->
-                    law_invariant_idempotent h
+                \(TestHitbox h) -> law_invariant_idempotent h
             )

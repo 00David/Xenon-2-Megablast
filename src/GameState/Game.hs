@@ -64,7 +64,7 @@ startInitGame = do
 data GameState = -- not a State monad (see InGameState at the end of the file)
     StartMenu StartMenuOption
     | InGame InGameInfos
-    deriving (Show)
+    deriving (Eq, Show)
 
 prop_inv_gameState :: GameState -> Bool
 prop_inv_gameState (StartMenu _) = True
@@ -100,7 +100,7 @@ prop_pre_startInitInGame _ nbPlayers = nbPlayers == 1 || nbPlayers == 2
 -- ============================================================
 
 data StartMenuOption = OnePlayer | TwoPlayers
-    deriving (Show, Eq)
+    deriving (Eq, Show)
 
 instance Renderable StartMenuOption where
     getTranslatedAssets :: GameAssets -> StartMenuOption -> [Picture]
@@ -134,7 +134,7 @@ data InGameInfos = InGameInfos {
         gameProjectiles :: [Projectile],
         gameHitExplosions :: [Explosion],
         gameBonuses :: [Bonus]
-    } deriving (Show)
+    } deriving (Eq, Show)
 
 prop_inv_ingameinfos :: InGameInfos -> Bool
 prop_inv_ingameinfos (InGameInfos screenSpeed p1 p2 enemies walls projs expl bns) = screenSpeed > 0 
@@ -196,7 +196,7 @@ prop_post_updatePlayerDirectionSpeed isP1 (dir, os) igi@(InGameInfos _ _ _ _ _ _
         dir2' = (objectDirection po2')
         os1' = (objectSpeed po1')
         os2' = (objectSpeed po2')
-    in (sameInGameInfosExceptPlayer isP1 igi igi') 
+    in (sameInGameInfosExceptPlayer isP1 igi igi') -- everything stays the same for the player, except its nex direction and object speed
         && if isP1
             then not (isPlayerDead p1') && dir == dir1' && os == os1'
             else not (isPlayerDead p2') && dir == dir2' && os == os2'
@@ -242,7 +242,7 @@ movePlayerInsideScreen isP1 igi@(InGameInfos ss p1 p2 enemies walls projs expl b
 prop_pre_movePlayerInsideScreen :: Bool -> InGameInfos -> Bool
 prop_pre_movePlayerInsideScreen isP1 (InGameInfos _ p1 p2 _ _ _ _ _) = 
     let p = if isP1 then p1 else p2
-    in not (isPlayerDead p)
+    in not (isPlayerDead p) -- a dead player cannot move (inside the screen)
 
 prop_post_movePlayerInsideScreen :: Bool -> InGameInfos -> Bool
 prop_post_movePlayerInsideScreen isP1 igi@(InGameInfos _ _ _ _ _ _ _ _) =
@@ -275,9 +275,10 @@ handleCollisionPlayerWithEnemies  isP1 (InGameInfos ss p1 p2 enemies gw projs ex
                         then takeDamage (enemyCollisionDamage e) p
                         else p
                 ) player enemies
+        newPlayer' = (addScore scoreFromEnemies newPlayer)
     in 
-        if isP1 then ((), initInGameInfos ss newPlayer p2 newEnemies gw projs expl bns)
-        else ((), initInGameInfos ss p1 newPlayer newEnemies gw projs expl bns)
+        if isP1 then ((), initInGameInfos ss newPlayer' p2 newEnemies gw projs expl bns)
+        else ((), initInGameInfos ss p1 newPlayer' newEnemies gw projs expl bns)
 
 prop_pre_handleCollisionPlayerWithEnemies :: Bool -> InGameInfos -> Bool
 prop_pre_handleCollisionPlayerWithEnemies isP1 (InGameInfos _ p1 p2 _ _ _ _ _) =
@@ -287,7 +288,7 @@ prop_pre_handleCollisionPlayerWithEnemies isP1 (InGameInfos _ p1 p2 _ _ _ _ _) =
 prop_post_handleCollisionPlayerWithEnemies :: Bool -> InGameInfos -> Bool
 prop_post_handleCollisionPlayerWithEnemies isP1 igi@(InGameInfos ss p1 p2 enemies gw projs expl bns) =
     let (_, (InGameInfos ss' p1' p2' enemies' gw' projs' expl' bns')) = (handleCollisionPlayerWithEnemies isP1 igi)
-    in if isP1 
+    in if isP1 -- eveyring stays the same for InGameInfos, except having maybe the concerned player score / lifes changed
         then (length enemies') <= (length enemies) && (playerLifes p1') <= (playerLifes p1) 
             && (playerScore p1') >= (playerScore p1) && ss == ss' && p2 == p2' && gw == gw' && projs == projs' && expl == expl' && bns == bns'
         else (length enemies') <= (length enemies) && (playerLifes p2') <= (playerLifes p2) 
@@ -312,6 +313,7 @@ prop_post_moveWalls :: InGameInfos -> Bool
 prop_post_moveWalls igi@(InGameInfos ss p1 p2 ennemies _ projs expl bns) =
     let (_, (InGameInfos ss' p1' p2' ennemies' gw' projs' expl' bns')) = moveWalls igi
     in 
+        -- game walls are all inside the screen, and other infos remain unchanged
         insideScreen gw' && ss == ss' && p1 == p1' && p2 == p2' && ennemies == ennemies' && projs == projs' && expl == expl' && bns == bns'
 
 
@@ -364,9 +366,8 @@ prop_post_keepBumpin ss obj gw anotherP =
         leftBound = leftXScreenBound + (widthPlayer / 2)
         rightBound = rightXScreenBound - (widthPlayer / 2)
     in 
-        not (collision obj' gw) && not (collision obj' anotherP)
-        && y' == y 
-        && x' >= leftBound && x' <= rightBound
+        -- the resulting object is not colliding at all with a wall or a player, has its Y kept the same, and has its X inside the screen
+        not (collision obj' gw) && not (collision obj' anotherP) && y' == y && x' >= leftBound && x' <= rightBound
 
 
 -- Bumps the player from a wall
@@ -406,14 +407,16 @@ bumpPlayerFromWalls isP1 igi@(InGameInfos ss p1 p2 enemies gw projs expl bns) =
                     else ((), initInGameInfos ss p1 newP enemies gw projs expl bns)
 
 prop_pre_bumpPlayerFromWalls :: Bool -> InGameInfos -> Bool
-prop_pre_bumpPlayerFromWalls isP1 (InGameInfos _ p1 p2 _ _ _ _ _) =
+prop_pre_bumpPlayerFromWalls isP1 (InGameInfos _ p1 p2 _ gw _ _ _) =
     let p = if isP1 then p1 else p2
-    in not (isPlayerDead p)
+    in not (isPlayerDead p) && not (collision p gw) -- player must be alive, and do not already collide with a wall
 
 prop_post_bumpPlayerFromWalls :: Bool -> InGameInfos -> Bool
 prop_post_bumpPlayerFromWalls isP1 igi@(InGameInfos ss p1 p2 enemies gw projs expl bns) =
     let (_, (InGameInfos ss' p1' p2' enemies' gw' projs' expl' bns')) = (bumpPlayerFromWalls isP1 igi)
     in if isP1 
+        -- all informations remain unchanged, except the concerned player (that maybe moved), not colliding with a wall 
+        -- and being still alive (no damages taken normally)
         then not (isPlayerDead p1') &&  not (collision p1' gw')
             && ss == ss' && p2 == p2' && enemies == enemies' && gw == gw' && projs == projs' && expl == expl' && bns == bns'
         else not (isPlayerDead p2') &&  not (collision p2' gw')
@@ -429,17 +432,18 @@ moveProjectiles (InGameInfos ss p1 p2 enemies walls projs expl bns) =
         ((), initInGameInfos ss p1 p2 enemies walls newProjectiles expl bns)
 
 prop_pre_moveProjectiles :: InGameInfos -> Bool
-prop_pre_moveProjectiles (InGameInfos _ _ _ _ _ projs _ _) = all insideScreenOrAboveProjectile projs
+prop_pre_moveProjectiles (InGameInfos _ _ _ _ _ projs _ _) = all insideScreenProjectile projs
 
 prop_post_moveProjectiles :: InGameInfos -> Bool
 prop_post_moveProjectiles igi@(InGameInfos ss p1 p2 enemies walls _ expl bns) = 
     let (_, (InGameInfos ss' p1' p2' enemies' walls' projs' expl' bns')) = moveProjectiles igi
-    in (all insideScreenOrAboveProjectile projs')
+    in (all insideScreenProjectile projs')
+        -- all informations remain unchanged, except for projectiles that have moved, and those kept being all inside the screen
         && ss == ss' && p1 == p1' && p2 == p2' && enemies == enemies' && walls == walls' && expl == expl' && bns == bns'
 
 
 -- Considers a projectile, and an enemy with player1 and 2 accumulated scores given by kills.
--- Eventually increment one of those counters if the enemy is killed by the projectile.
+-- Eventually increment one of those counters by the score got from the enemy, if it is is killed by the projectile.
 applyProjectileToEnemy :: Projectile -> (Maybe Enemy, Score, Score) -> (Maybe Enemy, Score, Score)
 applyProjectileToEnemy _ (Nothing, scoreP1, scoreP2) = (Nothing, scoreP1, scoreP2)
 applyProjectileToEnemy proj (Just enemy, scoreP1, scoreP2)
@@ -455,12 +459,14 @@ applyProjectileToEnemy proj (Just enemy, scoreP1, scoreP2)
                     _ -> (Nothing, scoreP1, scoreP2)
 
 prop_pre_applyProjectileToEnemy :: Projectile -> (Maybe Enemy, Int, Int) -> Bool
-prop_pre_applyProjectileToEnemy _ (_, p1Kills, p2Kills) = p1Kills >= 0 && p2Kills >= 0
+prop_pre_applyProjectileToEnemy proj (_, scoreP1, scoreP2) = 
+    scoreP1 >= 0 && scoreP2 >= 0 && isPlayerShot proj -- only null or positive scores, and player shot as a parameter
 
 prop_post_applyProjectileToEnemy :: Projectile -> (Maybe Enemy, Int, Int) -> Bool
-prop_post_applyProjectileToEnemy proj (maybeEnemy, p1Kills, p2Kills) =
-    let (_, p1Kills', p2Kills') = applyProjectileToEnemy proj (maybeEnemy, p1Kills, p2Kills)
-    in p1Kills' == (p1Kills+1) || p2Kills' == (p2Kills+1)
+prop_post_applyProjectileToEnemy proj (maybeEnemy, scoreP1, scoreP2) =
+    let (_, scoreP1', scoreP2') = applyProjectileToEnemy proj (maybeEnemy, scoreP1, scoreP2)
+    in  -- a player score (and only one of them) might have been incremented on an enemy kill (with its projectile)
+        (scoreP1' >= scoreP1 || scoreP2' >= scoreP2) && not (scoreP1' > scoreP1 && scoreP2' > scoreP2)
 
 
 -- If a player projectile collides with an enemy : decreases its health. Once an enemy has no health (=0), he is deleted from the game infos.
@@ -507,9 +513,9 @@ handleCollisionProjectilesWithPlayersEnemies gen (InGameInfos ss p1 p2 enemies g
                                 then takeDamage (projectileDamage proj) p
                                 else p
                         ) p2 enemyProjectiles
-        newP2' = (addScore p1ScoreToAdd newP2)
+        newP2' = (addScore p2ScoreToAdd newP2)
 
-        -- We remove enemy projectiles that collided with at least one alive player
+        -- We remove enemy projectiles that collided with at least one previously alive player
         remainingEnemyProjectiles = filter (\proj ->
             not (
                 (not (isPlayerDead p1) && collision proj p1)
@@ -528,13 +534,13 @@ handleCollisionProjectilesWithPlayersEnemies gen (InGameInfos ss p1 p2 enemies g
 
 prop_post_handleCollisionProjectilesWithPlayersEnemies :: StdGen -> InGameInfos -> Bool
 prop_post_handleCollisionProjectilesWithPlayersEnemies gen igi@(InGameInfos ss p1 p2 enemies gw projs expl bns) =
-    let (gen', (InGameInfos ss' p1' p2' enemies' gw' projs' expl' bns')) = (handleCollisionProjectilesWithPlayersEnemies gen igi)
+    let (_, (InGameInfos ss' p1' p2' enemies' gw' projs' expl' bns')) = (handleCollisionProjectilesWithPlayersEnemies gen igi)
     in 
+        -- we can have less enemies, player lifes descreased, player scores increased, new bonuses or explosions that spawned in the screen
         (length enemies') <= (length enemies) && (length projs') <= (length projs)
         && (playerLifes p1') <= (playerLifes p1) && (playerScore p1') >= (playerScore p1) 
         && (playerLifes p2') <= (playerLifes p2) && (playerScore p2') >= (playerScore p2)
-        && (length bns') >= (length bns) && gen /= gen'
-        && ss == ss' && gw == gw' && expl == expl'
+        && (length bns') >= (length bns) && (length expl') >= (length expl) && ss == ss' && gw == gw' -- walls and screen scrolling speed remain unchanged
 
 
 -- Runs all enemies: makes them shoot, then move them, and eventually delete them if they become out of the screen
@@ -569,9 +575,9 @@ prop_post_runEnemies :: InGameInfos -> Bool
 prop_post_runEnemies igi@(InGameInfos ss p1 p2 enemies gw projs expl bns) =
     let (_, (InGameInfos ss' p1' p2' enemies' gw' projs' expl' bns')) = runEnemies igi
     in 
+        -- all informations stay the same, except having potentially more projectiles (created by enemies), and non static enemies have moved
         ss == ss' && p1 == p1' && p2 == p2' && gw == gw' && expl == expl' && bns == bns'
-        && length enemies' == length enemies
-        && length projs' >= length projs
+        && length enemies' == length enemies && length projs' >= length projs
         -- All enemies (that can move) have been moved
         && all (\(oldE, newE) -> 
             let oldPos = centerHitbox (objectHitbox (enemyObject oldE))
@@ -613,6 +619,7 @@ prop_post_runExplosions igi@(InGameInfos ss p1 p2 enemies gw projs expl bns) =
     let
         (_, InGameInfos ss' p1' p2' enemies' gw' projs' expl' bns') = runExplosions igi
     in
+        -- all informations remain the same, except having potentially less explosions (being done)
         ss == ss' && p1 == p1' && p2 == p2' && enemies == enemies' && gw == gw' && projs == projs' && bns == bns'
         && length expl' <= length expl
 
@@ -629,7 +636,8 @@ runPlayersAnimation (InGameInfos ss p1 p2 enemies gw projs expl bns) =
 prop_post_runPlayersAnimation :: InGameInfos -> Bool
 prop_post_runPlayersAnimation igi@(InGameInfos ss _ _ enemies gw projs expl bns) =
     let (_, (InGameInfos ss' _ _ enemies' gw' projs' expl' bns')) = runPlayersAnimation igi
-    in  ss == ss' && enemies == enemies' && gw == gw' && projs == projs' && expl == expl' && bns == bns'
+    in  -- all game informations, except players, remain the same
+        ss == ss' && enemies == enemies' && gw == gw' && projs == projs' && expl == expl' && bns == bns'
 
 
 -- Generates periodically finite walls of rocks, each 'generateWallInterval' frames
@@ -647,11 +655,11 @@ prop_post_generateWall :: FrameCounter -> StdGen -> InGameInfos -> Bool
 prop_post_generateWall currentFrameCounter gen igi@(InGameInfos ss p1 p2 enemies gw projs expl bns) =
     let (gen', (InGameInfos ss' p1' p2' enemies' gw' projs' expl' bns')) = generateWall currentFrameCounter gen igi
     in 
-        -- case of no generation
+        -- case of no generation : informations remain unchanged
         if currentFrameCounter `mod` generateWallInterval /= 0 || currentFrameCounter == 0 then gen == gen' &&
             ss == ss' && p1 == p1' && p2 == p2' && enemies == enemies' && gw == gw' && projs == projs' && expl == expl' && bns == bns'
         
-        -- case of wall generation
+        -- case of wall generation : new finite walls might has been added, the rest is kept unchanged
         else ss == ss' && p1 == p1' && p2 == p2' && enemies == enemies' && projs == projs' && expl == expl' && bns == bns' && 
             case (gameFiniteWalls gw, gameFiniteWalls gw') of
                 (walls, walls') -> length walls <= length walls'
@@ -671,7 +679,7 @@ prop_pre_moveBonuses (InGameInfos _ _ _ _ _ _ _ bns) = all insideScreenOrAboveBo
 prop_post_moveBonuses :: InGameInfos -> Bool
 prop_post_moveBonuses igi@(InGameInfos ss p1 p2 enemies walls projs expl _) = 
     let (_, (InGameInfos ss' p1' p2' enemies' walls' projs' expl' bns')) = moveBonuses igi
-    in (all insideScreenOrAboveBonus bns')
+    in (all insideScreenOrAboveBonus bns') -- all kept bonuses after the movement are inside the screen, other informations remain unchanged
         && ss == ss' && p1 == p1' && p2 == p2' && enemies == enemies' && walls == walls' && expl == expl' && projs == projs'
 
 
@@ -699,6 +707,7 @@ prop_post_handleCollisionPlayerWithBonuses :: Bool -> InGameInfos -> Bool
 prop_post_handleCollisionPlayerWithBonuses isP1 igi@(InGameInfos ss p1 p2 enemies gw projs expl bns) =
     let (_, (InGameInfos ss' p1' p2' enemies' gw' projs' expl' bns')) = (handleCollisionPlayerWithBonuses isP1 igi)
     in if isP1 
+        -- except for the player, who might have got a bonus, all other informations remain unchanged
         then  length bns' <= length bns && ss == ss' && p2 == p2' && enemies == enemies' && gw == gw' && projs == projs' && expl == expl'
         else length bns' <= length bns && ss == ss' && p1 == p1' && enemies == enemies' && gw == gw' && projs == projs' && expl == expl'
 
@@ -714,8 +723,8 @@ incrementPlayersShootFrameCounters (InGameInfos ss p1 p2 enemies gw projs expl b
 prop_post_incrementPlayersShootFrameCounters :: InGameInfos -> Bool
 prop_post_incrementPlayersShootFrameCounters igi@(InGameInfos ss _ _ enemies gw projs expl bns) =
     let (_, (InGameInfos ss' _ _ enemies' gw' projs' expl' bns')) = (incrementPlayersShootFrameCounters igi)
-    in ss == ss' && enemies == enemies' && gw == gw' && projs == projs' && expl == expl' && bns == bns'
-    -- the increment itself is verified by the "incrementShootFrameCounter" postcondition
+    in -- all other inforamtions than the players are kept unchanged (the players have their internal shoot frame counter incremented)
+        ss == ss' && enemies == enemies' && gw == gw' && projs == projs' && expl == expl' && bns == bns'
 
 
 -- ============================================================
@@ -738,7 +747,7 @@ updateInGame nbFrames gen kbd deltaTime = do
     -- potentially generate enemies
     gen3 <- generateEnemiesSt nbFrames gen2
 
-    -- make ennemies shoot and move them
+    -- make ennemies shoot, and move them
     runEnemiesSt
 
     -- move walls
@@ -778,7 +787,7 @@ updateInGame nbFrames gen kbd deltaTime = do
         handleCollisionPlayerWithBonusesSt False
       else return ()
 
-    -- update hit explosion animations
+    -- update prjectile hit explosion animations
     runExplosionsSt
 
     -- move projectiles

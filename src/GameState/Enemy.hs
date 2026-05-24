@@ -17,7 +17,7 @@ import Typeclasses.Invariant
 import Typeclasses.Movable
 
 -- ============================================================
--- ========================= ENNEMY ===========================
+-- ========================= ENEMY ============================
 -- ============================================================
 
 data Enemy = Enemy {
@@ -39,7 +39,7 @@ initEnemy eo health dmg score script
     | score <= 0 = error "ennemy given score must be strictly positive"
     | otherwise = Enemy eo health dmg score script
 
-noMoveButBoomEnemyHitbox :: Float -> Float -> Hitbox
+noMoveButBoomEnemyHitbox :: XCoord -> YCoord -> Hitbox
 noMoveButBoomEnemyHitbox x y =
     let width = Seq.index widthEnemies 0
         height = Seq.index heightEnemies 0
@@ -51,7 +51,7 @@ noMoveButBoomEnemyHitbox x y =
             initHitboxRectangle (x-30) (y-11) width 22
         ]
 
-leftRightShootEnemyHitbox :: Float -> Float -> Hitbox
+leftRightShootEnemyHitbox :: XCoord -> YCoord -> Hitbox
 leftRightShootEnemyHitbox x y =
     let width = Seq.index widthEnemies 1
         height = Seq.index heightEnemies 1
@@ -62,7 +62,7 @@ leftRightShootEnemyHitbox x y =
             initHitboxRectangle (x-30) (y-2) width 32
         ]
 
-loopEnemyHitbox :: Float -> Float -> Hitbox
+loopEnemyHitbox :: XCoord -> YCoord -> Hitbox
 loopEnemyHitbox x y =
     let width = Seq.index widthEnemies 2
         height = Seq.index heightEnemies 2
@@ -75,7 +75,7 @@ loopEnemyHitbox x y =
             initHitboxRectangle (x-5) (y-49) 10 (height-1)
         ]
 
-startInitNoMoveButBoomEnemy :: Float -> Float -> Enemy
+startInitNoMoveButBoomEnemy :: XCoord -> YCoord -> Enemy
 startInitNoMoveButBoomEnemy x y =
     let eo = (initStaticObject (noMoveButBoomEnemyHitbox x y))
     in (initEnemy eo 
@@ -84,7 +84,7 @@ startInitNoMoveButBoomEnemy x y =
         noMoveButBoomEnemyScore 
         startInitNoMoveButBoomEnemyScript)
 
-startInitLeftRightShootEnemy :: Float -> Float -> Float -> Float -> Enemy
+startInitLeftRightShootEnemy :: XCoord -> YCoord -> XCoord -> YCoord -> Enemy
 startInitLeftRightShootEnemy x y xTarget yTarget =
     let eo = (initMovableObject 
                 (leftRightShootEnemyHitbox x y)
@@ -97,7 +97,7 @@ startInitLeftRightShootEnemy x y xTarget yTarget =
         leftRightShootEnemyScore 
         (startInitLeftRightShootEnemyScript xTarget yTarget))
 
-startInitLoopEnemy :: Float -> Float -> Float -> Enemy
+startInitLoopEnemy :: XCoord -> YCoord -> YCoord -> Enemy
 startInitLoopEnemy x y yTarget =
     let eo = (initMovableObject 
                 (loopEnemyHitbox x y)
@@ -110,32 +110,22 @@ startInitLoopEnemy x y yTarget =
         loopEnemyScore 
         (startInitLoopEnemyScript yTarget))
 
--- Creates an Enemy shot, if possible to shoot
-enemyShot :: Enemy -> Maybe Projectile
-enemyShot (Enemy eo _ _ _ script) =
-    let (x,y) = centerHitbox (objectHitbox eo)
-    in case script of
-        (LeftRightShootEnemy _ _ shootD) -> 
-            if shootD == 1 
-                then 
-                    Just (startInitEnemyShot x (y-50) (initObjectSpeed leftRightShootEnemyShotSpeed) 0 (leftRightShootEnemyShotDamage))
-                else
-                    Nothing
-        _ -> Nothing
-
+-- ============================================================
+-- =================== ENEMY OPERATIONS =======================
+-- ============================================================
 
 -- Moves an enemy according to its script
 moveEnemy :: Enemy -> ScreenScrollingSpeed -> Enemy
 moveEnemy (Enemy eo health dmg score script) screenSpeed =
     let newEo = (moveObject eo screenSpeed) -- moves the enemy
     in case script of
-        (NoMoveButBoomEnemy) -> (initEnemy newEo health dmg score initNoMoveButBoomEnemyScript)
+        (NoMoveButBoomEnemy) -> (initEnemy newEo health dmg score initNoMoveButBoomEnemyScript) -- don't move
         (LeftRightShootEnemy xTarget yTarget shootD) -> 
             let
                 (Direction xDir yDir) = objectDirection newEo
                 (x, y) = centerHitbox (objectHitbox newEo)
 
-                -- switch X target direction if reached
+                -- switch X target direction if reached (opposite sign)
                 newXTarget = if (xDir == -1 && x <= xTarget) || (xDir == 1 && x >= xTarget) then (-xTarget) else xTarget
                 newXDir = if (y <= yTarget) -- only if Y target already reached
                     then if (x < newXTarget) then 1 else -1 
@@ -200,7 +190,7 @@ moveEnemy (Enemy eo health dmg score script) screenSpeed =
 
 prop_pre_moveEnemy :: Enemy -> ScreenScrollingSpeed -> Bool
 prop_pre_moveEnemy (Enemy eo _ _ _ script) screenSpeed =
-    let positiveScreenSpeed = screenSpeed > 0
+    let positiveScreenSpeed = screenSpeed > 0 -- screen scrolling speed must be positive
         (Direction dirX dirY) = objectDirection eo
         (x,y) = centerHitbox (objectHitbox eo)
         (ObjectSpeed speed) = objectSpeed eo
@@ -416,6 +406,21 @@ prop_post_moveEnemy e@(Enemy eo health dmg score script) screenSpeed =
 insideScreenOrAboveEnemy :: Enemy -> Bool
 insideScreenOrAboveEnemy (Enemy eo _ _ _ _) = insideScreenOrAboveHitbox (objectHitbox eo)
 
+
+-- Creates an Enemy shot, if possible to shoot
+enemyShot :: Enemy -> Maybe Projectile
+enemyShot (Enemy eo _ _ _ script) =
+    let (x,y) = centerHitbox (objectHitbox eo)
+    in case script of
+        (LeftRightShootEnemy _ _ shootD) -> 
+            if shootD == 1 
+                then 
+                    Just (startInitEnemyShot x (y-50) (initObjectSpeed leftRightShootEnemyShotSpeed) 0 (leftRightShootEnemyShotDamage))
+                else
+                    Nothing
+        _ -> Nothing
+
+
 -- Makes an enemy potentially shoot, according to its script
 shootEnemy :: Enemy -> (Maybe Projectile, Enemy)
 shootEnemy e@(Enemy eo health dmg score script) =
@@ -424,7 +429,7 @@ shootEnemy e@(Enemy eo health dmg score script) =
             let 
                 maybeProj = enemyShot e
                 newShootD = if shootD == 1 then leftRightShootEnemyShootDelay else (shootD-1) -- shoot delay reseted or decremented
-                newScript = (initLeftRightShootEnemyScript xTarget yTarget newShootD)
+                newScript = (initLeftRightShootEnemyScript xTarget yTarget newShootD) -- update the internal script delay
             in (maybeProj, (initEnemy eo health dmg score newScript))
         _ -> (Nothing, e)
 
@@ -438,18 +443,20 @@ prop_post_shootEnemy e@(Enemy eo health dmg score script) =
         (LeftRightShootEnemy xTarget yTarget shootD) ->
             case script' of
                 (LeftRightShootEnemy xTarget' yTarget' shootD') ->
+                    let hasShot = shootD == 1 in
+
                     -- Target positions should remain unchanged
                     xTarget' == xTarget && yTarget' == yTarget
 
                     -- Shoot delay should reset after shooting, otherwise remain unchanged
-                    && (if shootD > 1
-                        then shootD' == shootD
-                        else shootD' == leftRightShootEnemyShootDelay)
+                    && shootD' == (if hasShot
+                                        then leftRightShootEnemyShootDelay
+                                        else (shootD - 1))
 
-                    -- A shooting enemy should create a projectile
+                    -- A shooting enemy should have creates a projectile if the delay reached 1
                     && case maybeProj of
-                        Nothing -> False
-                        Just _ -> True
+                        Nothing -> not hasShot
+                        Just _ -> hasShot
                 _ -> False
 
         -- Non-shooting scripts should stay identical
@@ -487,13 +494,20 @@ generateListEnemies n gen
         in
             (gen5,enemies)
 
+prop_pre_generateListEnemies :: Int -> StdGen -> Bool
+prop_pre_generateListEnemies n _ = n <= 5 -- don't create more than 5 enemies at once : ensures that all enemies will be then inside the screen
+
 prop_post_generateListEnemies :: Int -> StdGen -> Bool
 prop_post_generateListEnemies n gen =
     let (gen', newEnemies) = generateListEnemies n gen
-    in gen' /= gen && all insideScreen newEnemies -- for an Enemy, he is considered inside even above screen
+    in if n == 0 then gen' == gen && (length newEnemies) == 0 -- no generations
+        else gen' /= gen && all insideScreen newEnemies -- for an Enemy, he is considered inside even above screen
 
--- Generates a formation of enemies, for the given parameters
-generateFormation :: Int -> Int -> Float -> Float -> Float -> Float -> [Enemy]
+
+-- Generates a formation of enemies, for the given parameters, having centerX being the X center of the fromation
+-- (the X of the center enemy) and y the Y of all enemies part of the formation;
+-- Must generate formations whith a number of enemies inside of [1, 5], X coordinates in the screen bounds, and Y coordinates in the screen or above
+generateFormation :: Int -> Int -> XCoord -> YCoord -> XCoord -> YCoord -> [Enemy]
 generateFormation enemyType n centerX y xTarget yTarget =
     let
         spacing = 100
@@ -507,9 +521,9 @@ generateFormation enemyType n centerX y xTarget yTarget =
                     _ -> startInitLoopEnemy x y yTarget
             ) xs
 
-prop_pre_generateFormation :: Int -> Int -> Float -> Float -> Float -> Float -> Bool
+prop_pre_generateFormation :: Int -> Int -> XCoord -> YCoord -> XCoord -> YCoord -> Bool
 prop_pre_generateFormation enemyType n centerX y xTarget yTarget =
-    (enemyType >= 0 && enemyType <= 2) && (n >= 1 && n <= 5) -- verifies the type and number of enemies
+    (enemyType >= 0 && enemyType <= (nbEnemiesAssets-1)) && (n >= 1 && n <= 5) -- verifies the type and number of enemies
     -- given the spacing (100) and the max number of enemies in the formation (5), ensures that the center of it will show all enemies
     && centerX >= (leftXScreenBound+200) && centerX <= (rightXScreenBound-200)
     && y > topYScreenBound -- y above screen because enemies spawn above
@@ -519,11 +533,11 @@ prop_pre_generateFormation enemyType n centerX y xTarget yTarget =
 prop_post_generateFormation :: Int -> Int -> Float -> Float -> Float -> Float -> Bool
 prop_post_generateFormation enemyType n centerX y xTarget yTarget =
     let newEnemies = generateFormation enemyType n centerX y xTarget yTarget
-    in (length newEnemies) > 0 && all insideScreen newEnemies -- for an Enemy, he is considered inside even above screen
+    in (length newEnemies) > 0 && all insideScreen newEnemies -- all generated enemies must be inside or above the screen
 
 
 -- ============================================================
--- =================== ENNEMY INVARIANT =======================
+-- ==================== ENEMY INVARIANT =======================
 -- ============================================================
 
 instance Invariant Enemy where
@@ -546,6 +560,9 @@ getTranslatedEnemyAsset ga (Enemy eo _ _ _ script) =
         (NoMoveButBoomEnemy) -> [Translate ex ey (Seq.index (enemiesPics ga) 0)]
         (LeftRightShootEnemy _ _ _) -> [Translate ex ey (Seq.index (enemiesPics ga) 1)]
         (LoopEnemy _ _ _ _ _ _ _ _ _) -> [Translate ex ey (Seq.index (enemiesPics ga) 2)]
+
+prop_post_getTranslatedEnemyAsset :: GameAssets -> Enemy -> Bool
+prop_post_getTranslatedEnemyAsset ga e = length (getTranslatedEnemyAsset ga e) == 1 -- exactly one asset
 
 -- ============================================================
 -- ===================== ENEMY MOVABLE =======================
@@ -574,10 +591,8 @@ instance Collidable Enemy where
 
     willCollide :: Collidable b => Enemy -> b -> ScreenScrollingSpeed -> Bool  
     willCollide enemy other screenSpeed =
-        let objs1 = getObjects enemy
-            objs2 = getObjects other
-            movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
-        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
+        let enemyMoved = move enemy screenSpeed
+        in collision enemyMoved other
 
 -- ============================================================
 -- ==================== ENEMY DESTROYABLE =====================
@@ -585,11 +600,27 @@ instance Collidable Enemy where
 
 instance Destroyable Enemy where
     takeDamageMaybe :: Damage -> Enemy -> Maybe Enemy
-    takeDamageMaybe d (Enemy obj health dmg score script) = 
-        let newHealth = health-d
-        in
+    takeDamageMaybe d e@(Enemy obj health dmg score script) = 
+        if d <= 0 then Just e -- no enemy change
+        else let newHealth = (health-d) in
             if newHealth > 0 then Just (initEnemy obj newHealth dmg score script)
-            else Nothing
+            else Nothing -- if the enemy has its health becoming <= 0 : becomes dead (Nothing)
+
+prop_post_takeDamageMaybeEnemy :: Damage -> Enemy -> Bool
+prop_post_takeDamageMaybeEnemy d e =
+    let result = takeDamageMaybe d e
+    in case (e, result) of
+        -- Enemy survives after damage
+        (Enemy obj h dmg score script, Just (Enemy obj' h' dmg' score' script'))
+            | d <= 0 ->
+                obj' == obj && h == h' && dmg' == dmg && score' == score && script' == script
+            | (h - d > 0) ->
+                obj' == obj && h' == (h - d) && dmg' == dmg && score' == score && script' == script
+        -- Enemy dies after damage
+        (Enemy _ h _ _ _, Nothing)
+            | h - d <= 0 -> True
+        -- Any other situation is invalid
+        _ -> False
 
 -- ============================================================
 -- ===================== ENNEMY SCRIPT=========================
@@ -606,7 +637,7 @@ data EnemyScript =
     | LeftRightShootEnemy{ 
             xTargetEnemyScript :: Float,  -- the X that the enemy must reach while going left or right. Once it is reached, its sign is inverted. 
             yTargetEnemyScript :: Float, -- the Y that the enemy must reach before going left/right
-            shootDelayEnemyScript :: Int -- shoots every time this delay reaches 1, then reseted.
+            shootDelayEnemyScript :: Int -- shoots every time this delay reaches 1, then reseted. Must be inside [1, leftRightShootEnemyShootDelay]
         }
     | LoopEnemy{ 
             yTargetEnemyScript :: Float,
@@ -626,7 +657,7 @@ prop_inv_enemyScript (NoMoveButBoomEnemy) = True
 prop_inv_enemyScript (LeftRightShootEnemy xTarget yTarget shootD) = 
     xTarget > leftXScreenBound && xTarget < rightXScreenBound
     && yTarget > bottomYScreenWithBarBound 
-    && shootD > 0
+    && shootD > 0 && shootD <= leftRightShootEnemyShootDelay
 prop_inv_enemyScript (LoopEnemy yTarget blSteps lSteps tlSteps tSteps trSteps rSteps brSteps _) = 
     yTarget > bottomYScreenWithBarBound
     && blSteps >= 0 && blSteps <= defaultNbSteps
@@ -637,17 +668,21 @@ prop_inv_enemyScript (LoopEnemy yTarget blSteps lSteps tlSteps tSteps trSteps rS
     && rSteps >= 0 && rSteps <= defaultNbSteps
     && brSteps >= 0 && brSteps <= defaultNbSteps
 
+-- ============================================================
+-- ================ ENEMY SCRIPT CONSTRUCTORS =================
+-- ============================================================
+
 initNoMoveButBoomEnemyScript :: EnemyScript
 initNoMoveButBoomEnemyScript = NoMoveButBoomEnemy
 
-initLeftRightShootEnemyScript :: Float -> Float -> DelayRemaining -> EnemyScript
+initLeftRightShootEnemyScript :: XCoord -> YCoord -> DelayRemaining -> EnemyScript
 initLeftRightShootEnemyScript xTarget yTarget shootDelay
     | xTarget <= leftXScreenBound || xTarget >= rightXScreenBound = error "xTarget out of screen"
     | yTarget <= bottomYScreenWithBarBound = error "yTarget bellow screen"
-    | shootDelay < 1 = error "invalid shootDelay"
+    | shootDelay < 1 || shootDelay > leftRightShootEnemyShootDelay = error "invalid shootDelay"
     | otherwise = LeftRightShootEnemy xTarget yTarget shootDelay
 
-initLoopEnemyScript :: Float -> NbStepsRemaining -> NbStepsRemaining -> NbStepsRemaining -> NbStepsRemaining -> 
+initLoopEnemyScript :: YCoord -> NbStepsRemaining -> NbStepsRemaining -> NbStepsRemaining -> NbStepsRemaining -> 
     NbStepsRemaining -> NbStepsRemaining -> NbStepsRemaining -> Bool -> EnemyScript
 initLoopEnemyScript yTarget blSteps lSteps tlSteps tSteps trSteps rSteps brSteps goBottom
     | yTarget <= bottomYScreenWithBarBound = error "yTarget bellow screen"
@@ -663,10 +698,10 @@ initLoopEnemyScript yTarget blSteps lSteps tlSteps tSteps trSteps rSteps brSteps
 startInitNoMoveButBoomEnemyScript :: EnemyScript
 startInitNoMoveButBoomEnemyScript = initNoMoveButBoomEnemyScript
 
-startInitLeftRightShootEnemyScript :: Float -> Float -> EnemyScript
+startInitLeftRightShootEnemyScript :: XCoord -> YCoord -> EnemyScript
 startInitLeftRightShootEnemyScript xTarget yTarget = (initLeftRightShootEnemyScript xTarget yTarget leftRightShootEnemyShootDelay)
 
-startInitLoopEnemyScript :: Float -> EnemyScript
+startInitLoopEnemyScript :: YCoord -> EnemyScript
 startInitLoopEnemyScript yTarget = 
     (initLoopEnemyScript yTarget defaultNbSteps defaultNbSteps defaultNbSteps defaultNbSteps defaultNbSteps defaultNbSteps defaultNbSteps False)
 

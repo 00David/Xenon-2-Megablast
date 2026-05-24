@@ -26,6 +26,10 @@ data Bonus = PlayerBonus { -- we could imagine having more types of bonuses ...
 prop_inv_bonus :: Bonus -> Bool
 prop_inv_bonus (PlayerBonus bo psb) = prop_inv_object bo && prop_inv_playerShootBonus psb
 
+-- ============================================================
+-- =================== BONUS CONSTRUCTORS =====================
+-- ============================================================
+
 initPlayerShootBonus :: Object -> PlayerShootBonus -> Bonus
 initPlayerShootBonus bo psb = PlayerBonus bo psb
 
@@ -35,13 +39,9 @@ startInitPlayerShootBonus x y psb =
         bo = (initStaticObject h)
     in (initPlayerShootBonus bo psb)
 
--- Indicates if a bonus is inside of the screen, or above 
-insideScreenOrAboveBonus :: Bonus -> Bool
-insideScreenOrAboveBonus (PlayerBonus bo _) = insideScreenOrAboveHitbox (objectHitbox bo)
-
--- Moves a bonus
-moveBonus :: Bonus -> ScreenScrollingSpeed -> Bonus
-moveBonus (PlayerBonus bo psb) ss = initPlayerShootBonus (moveObject bo ss) psb
+-- ============================================================
+-- ==================== BONUS OPERATIONS ======================
+-- ============================================================
 
 -- Randomly possibly generates a new bonus where the given enemy died
 generateBonusForEnemy :: Enemy -> (StdGen, [Bonus]) -> (StdGen, [Bonus])
@@ -134,6 +134,21 @@ prop_post_generateNewBonuses gen enemiesBefore enemiesAfter =
             _ -> True
         ) bonuses
 
+-- Moves a bonus
+moveBonus :: Bonus -> ScreenScrollingSpeed -> Bonus
+moveBonus (PlayerBonus bo psb) ss = initPlayerShootBonus (moveObject bo ss) psb
+
+prop_pre_moveBonus :: Bonus -> ScreenScrollingSpeed -> Bool
+prop_pre_moveBonus _ ss = ss >= 0 -- positive screen scrolling speed
+
+prop_post_moveBonus :: Bonus -> ScreenScrollingSpeed -> Bool
+prop_post_moveBonus b@(PlayerBonus _ psb) ss =
+    let (PlayerBonus _ psb') = moveBonus b ss
+    in psb == psb' -- ensures that the player bonus stays the same
+
+-- Indicates if a bonus is inside of the screen, or above 
+insideScreenOrAboveBonus :: Bonus -> Bool
+insideScreenOrAboveBonus (PlayerBonus bo _) = insideScreenOrAboveHitbox (objectHitbox bo)
 
 -- ============================================================
 -- ==================== BONUS INVARIANT =======================
@@ -162,6 +177,9 @@ getTranslatedBonusAsset ga (PlayerBonus bo psb) =
         MoreDamages ->  [Translate x y (Seq.index (playerShootBonusPics ga) 2)]
         BiggerShots ->  [Translate x y (Seq.index (playerShootBonusPics ga) 3)]
 
+prop_post_getTranslatedBonusAsset :: GameAssets -> Bonus -> Bool
+prop_post_getTranslatedBonusAsset ga bonus = length (getTranslatedBonusAsset ga bonus) <= 1 -- at most one bonus asset
+
 -- ============================================================
 -- ===================== BONUS MOVABLE ========================
 -- ============================================================
@@ -189,10 +207,8 @@ instance Collidable Bonus where
 
     willCollide :: Collidable b => Bonus -> b -> ScreenScrollingSpeed -> Bool  
     willCollide bonus other screenSpeed =
-        let objs1 = getObjects bonus
-            objs2 = getObjects other
-            movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
-        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
+        let bonusMoved = move bonus screenSpeed
+        in collision bonusMoved other
 
 -- ============================================================
 -- ================== PLAYER SHOOT BONUS ======================

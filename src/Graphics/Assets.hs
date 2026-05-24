@@ -20,8 +20,9 @@ class Renderable a where
     -- Get a list of translated assets representing the 'a'
     getTranslatedAssets :: GameAssets -> a -> [Picture]
 
+-- Ensures that the number of rendered assets stays reasonable.
 law_renderable_finite :: Renderable a => GameAssets -> a -> Bool
-law_renderable_finite ga x = Prelude.length (getTranslatedAssets ga x) < 100 -- ensures that the number of rendered assets stays reasonable
+law_renderable_finite ga x = Prelude.length (getTranslatedAssets ga x) < 100
 
 -- ============================================================
 -- ======================== GAME ASSETS =======================

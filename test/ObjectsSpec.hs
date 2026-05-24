@@ -36,6 +36,8 @@ spec = do
 -- ====================== OBJECTS =============================
 -- ============================================================
 
+
+-- Initializes Directions veryfing their invariant
 newtype TestDirection = TestDirection { getDirection :: Direction } deriving (Eq, Show)
 instance Arbitrary TestDirection where
     arbitrary :: Gen TestDirection
@@ -57,6 +59,7 @@ initDirectionSpec = do
             property prop_initDirection_preservesInvariant
 
 
+-- Initializes Object Speeds veryfing their invariant
 newtype TestObjectSpeed = TestObjectSpeed { getObjectSpeed :: ObjectSpeed } deriving (Eq, Show)
 instance Arbitrary TestObjectSpeed where
     arbitrary :: Gen TestObjectSpeed
@@ -73,6 +76,7 @@ initObjectSpeedSpec = do
             property prop_initObjectSpeed_preservesInvariant
 
 
+-- Initializes Objects veryfing their invariant
 newtype TestObject = TestObject { getObject :: Object } deriving (Eq, Show)
 instance Arbitrary TestObject where
     arbitrary :: Gen TestObject
@@ -285,61 +289,46 @@ commutativityCollisionObjectSpec = do
 invariantLawsSpec :: Spec
 invariantLawsSpec = do
     describe "Invariant laws (QuickCheck)" $ do
-
         it "law_invariant_stable for Direction" $
             property (
-                \(TestDirection d) ->
-                    law_invariant_stable d
+                \(TestDirection d) -> law_invariant_stable d
             )
-
         it "law_invariant_idempotent for Direction" $
             property (
-                \(TestDirection d) ->
-                    law_invariant_idempotent d
+                \(TestDirection d) -> law_invariant_idempotent d
             )
-
         it "law_invariant_stable for ObjectSpeed" $
             property (
-                \(TestObjectSpeed os) ->
-                    law_invariant_stable os
+                \(TestObjectSpeed os) -> law_invariant_stable os
             )
-
         it "law_invariant_idempotent for ObjectSpeed" $
             property (
-                \(TestObjectSpeed os) ->
-                    law_invariant_idempotent os
+                \(TestObjectSpeed os) -> law_invariant_idempotent os
             )
-
         it "law_invariant_stable for Object" $
             property (
-                \(TestObject o) ->
-                    law_invariant_stable o
+                \(TestObject o) -> law_invariant_stable o
             )
-
         it "law_invariant_idempotent for Object" $
             property (
-                \(TestObject o) ->
-                    law_invariant_idempotent o
+                \(TestObject o) -> law_invariant_idempotent o
             )
 
 collidableLawsSpec :: Spec
 collidableLawsSpec = do
     describe "Collidable laws (QuickCheck)" $ do
-
         it "law_collidable_reflexive for Object" $
-            property ( \(TestObject o) ->
-                prop_inv_object o ==>
-                law_collidable_reflexive o
+            property (\(TestObject o) ->
+                prop_inv_object o 
+                ==> law_collidable_reflexive o
             )
-
         it "law_collidable_symmetric for Object" $
-            property ( \(TestObject o1) (TestObject o2) ->
-                prop_inv_object o1 && prop_inv_object o2 ==>
-                law_collidable_symmetric o1 o2
+            property (\(TestObject o1) (TestObject o2) ->
+                prop_inv_object o1 && prop_inv_object o2 
+                ==> law_collidable_symmetric o1 o2
             )
-
         it "law_collidable_will_collide for Object" $
-            property ( \(TestObject o1) (TestObject o2) ->
-                prop_inv_object o1 && prop_inv_object o2 ==>
-                law_collidable_will_collide o1 o2
+            property (\(TestObject o1) (TestObject o2) ->
+                prop_inv_object o1 && prop_inv_object o2 
+                ==> law_collidable_will_collide o1 o2
             )

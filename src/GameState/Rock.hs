@@ -218,7 +218,5 @@ instance Collidable Rock where
 
     willCollide :: Collidable b => Rock -> b -> ScreenScrollingSpeed -> Bool  
     willCollide rock other screenSpeed =
-        let objs1 = getObjects rock
-            objs2 = getObjects other
-            movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
-        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
+        let rockMoved = move rock screenSpeed
+        in collision rockMoved other

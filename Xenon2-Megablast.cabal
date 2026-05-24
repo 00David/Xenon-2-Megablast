@@ -88,6 +88,7 @@ test-suite Xenon2-Megablast-test
   other-modules:
       AssetsSpec
       BackgroundSpec
+      BonusSpec
       EnemySpec
       ExplosionSpec
       GameSpec

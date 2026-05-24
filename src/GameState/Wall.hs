@@ -431,10 +431,8 @@ instance (Collidable a) => Collidable (FiniteWall a) where
 
     willCollide :: Collidable b => FiniteWall a -> b -> ScreenScrollingSpeed -> Bool  
     willCollide wall other screenSpeed =
-        let objs1 = getObjects wall
-            objs2 = getObjects other
-            movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
-        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
+        let wallMoved = move wall screenSpeed
+        in collision wallMoved other
 
 instance (Collidable a) => Collidable (InfiniteWall a) where
     getObjects :: InfiniteWall a -> [Object]
@@ -448,10 +446,8 @@ instance (Collidable a) => Collidable (InfiniteWall a) where
 
     willCollide :: Collidable b => InfiniteWall a -> b -> ScreenScrollingSpeed -> Bool  
     willCollide wall other screenSpeed =
-        let objs1 = getObjects wall
-            objs2 = getObjects other
-            movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
-        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
+        let wallMoved = move wall screenSpeed
+        in collision wallMoved other
 
 instance Collidable GameWalls where
     getObjects :: GameWalls -> [Object]
@@ -470,7 +466,5 @@ instance Collidable GameWalls where
 
     willCollide :: Collidable b => GameWalls -> b -> ScreenScrollingSpeed -> Bool
     willCollide gw other screenSpeed =
-        let objs1 = getObjects gw
-            objs2 = getObjects other
-            movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
-        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
+        let gwMoved = move gw screenSpeed
+        in collision gwMoved other

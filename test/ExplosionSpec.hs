@@ -30,6 +30,7 @@ spec = do
     invariantLawsSpec
     renderableLawSpec
 
+-- Initializes Explosions veryfing their invariant
 newtype TestExplosion = TestExplosion { getExplosion :: Explosion } deriving (Eq, Show)
 instance Arbitrary TestExplosion where
     arbitrary :: Gen TestExplosion
@@ -137,24 +138,18 @@ getTranslatedExplosionAssetQuickCheckSpec = do
 invariantLawsSpec :: Spec
 invariantLawsSpec = do
     describe "Invariant laws (QuickCheck)" $ do
-
         it "law_invariant_stable for Explosion" $
             property (
-                \(TestExplosion expl) ->
-                    law_invariant_stable expl
+                \(TestExplosion expl) -> law_invariant_stable expl
             )
-
         it "law_invariant_idempotent for Explosion" $
             property (
-                \(TestExplosion expl) ->
-                    law_invariant_idempotent expl
+                \(TestExplosion expl) -> law_invariant_idempotent expl
             )
 
 renderableLawSpec :: Spec
 renderableLawSpec = do
     describe "Renderable laws (QuickCheck)" $ do
-
         it "law_renderable_finite for Explosion" $
-            property (\(TestGameAssets ga) (TestExplosion expl) ->
-                law_renderable_finite ga expl
+            property (\(TestGameAssets ga) (TestExplosion expl) -> law_renderable_finite ga expl
             )

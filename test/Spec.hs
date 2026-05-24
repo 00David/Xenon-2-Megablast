@@ -1,8 +1,5 @@
 import Test.Hspec
-{--
-import qualified EnemySpec
-import qualified GameSpec
---}
+
 import qualified KeyboardSpec
 import qualified HitboxSpec
 import qualified ObjectsSpec
@@ -13,6 +10,9 @@ import qualified RockSpec
 import qualified WallSpec
 import qualified ProjectileSpec
 import qualified PlayerSpec
+import qualified EnemySpec
+import qualified BonusSpec
+import qualified GameSpec
 
 main :: IO ()
 main = hspec $ do
@@ -48,7 +48,10 @@ main = hspec $ do
     describe "[Player]" PlayerSpec.spec
 
     -- ENEMY
-    --describe "[Enemy]" EnemySpec.spec
+    describe "[Enemy]" EnemySpec.spec
+
+    -- BONUS
+    describe "[Bonus]" BonusSpec.spec
 
     -- GAME
-    --describe "[Game]" GameSpec.spec
+    describe "[Game]" GameSpec.spec

@@ -32,6 +32,7 @@ spec = do
     renderableLawSpec
     collidableLawsSpec
 
+-- Initializes Rocks veryfing their invariant
 newtype TestRock = TestRock { getRock :: Rock }deriving (Eq, Show)
 instance Arbitrary TestRock where
     arbitrary :: Gen TestRock
@@ -54,9 +55,9 @@ instance Arbitrary TestRock where
 prop_initRock_preservesInvariant :: TestObject -> Bool -> Bool -> Property
 prop_initRock_preservesInvariant (TestObject obj) leftSide forward =
     let isStatic = case obj of
-                    (StaticO _) -> True -- filter by keeping only static objects
+                    (StaticO _) -> True
                     _ -> False
-    in isStatic ==> 
+    in isStatic ==> -- filter by keeping only static objects
         forAll (choose (0, nbRockAssets - 1)) $ \asset ->
             prop_inv_rock (initRock obj asset leftSide forward)
 
@@ -137,23 +138,18 @@ getTranslatedRockAssetQuickCheckSpec = do
 invariantLawsSpec :: Spec
 invariantLawsSpec = do
     describe "Invariant laws (QuickCheck)" $ do
-
         it "law_invariant_stable for Rock" $
             property (
-                \(TestRock rock) ->
-                    law_invariant_stable rock
+                \(TestRock rock) -> law_invariant_stable rock
             )
-
         it "law_invariant_idempotent for Rock" $
             property (
-                \(TestRock rock) ->
-                    law_invariant_idempotent rock
+                \(TestRock rock) -> law_invariant_idempotent rock
             )
 
 renderableLawSpec :: Spec
 renderableLawSpec = do
     describe "Renderable laws (QuickCheck)" $ do
-
         it "law_renderable_finite for Rock" $
             property (\(TestGameAssets ga) (TestRock rock) ->
                 law_renderable_finite ga rock
@@ -162,33 +158,29 @@ renderableLawSpec = do
 collidableLawsSpec :: Spec
 collidableLawsSpec = do
     describe "Collidable laws (QuickCheck)" $ do
-
         it "law_collidable_reflexive for Rock" $
             property ( \(TestRock o) ->
-                prop_inv_rock o ==>
-                law_collidable_reflexive o
+                prop_inv_rock o 
+                ==> law_collidable_reflexive o
             )
-
         it "law_collidable_symmetric for Rock with another Rock" $
             property ( \(TestRock r1) (TestRock r2) ->
-                prop_inv_rock r1 && prop_inv_rock r2 ==>
-                law_collidable_symmetric r1 r2
+                prop_inv_rock r1 && prop_inv_rock r2 
+                ==> law_collidable_symmetric r1 r2
             )
-
         it "law_collidable_symmetric for Rock with another Object" $
             property ( \(TestRock r1) (TestObject o2) ->
-                prop_inv_rock r1 && prop_inv_object o2 ==>
-                law_collidable_symmetric r1 o2
+                prop_inv_rock r1 && prop_inv_object o2 
+                ==> law_collidable_symmetric r1 o2
             )
 
         it "law_collidable_will_collide for Rock with another Rock" $
             property ( \(TestRock r1) (TestRock r2) ->
-                prop_inv_rock r1 && prop_inv_rock r2 ==>
-                law_collidable_will_collide r1 r2
+                prop_inv_rock r1 && prop_inv_rock r2 
+                ==> law_collidable_will_collide r1 r2
             )
-
         it "law_collidable_will_collide for Rock with another Object" $
             property ( \(TestRock r1) (TestObject o2) ->
-                prop_inv_rock r1 && prop_inv_object o2 ==>
-                law_collidable_will_collide r1 o2
+                prop_inv_rock r1 && prop_inv_object o2 
+                ==> law_collidable_will_collide r1 o2
             )

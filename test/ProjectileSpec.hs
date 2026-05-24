@@ -16,7 +16,6 @@ import GameState.Projectile
 import Graphics.Assets
 import Objects.Objects
 import Objects.Hitbox
-import Typeclasses.Damageable
 import Typeclasses.Invariant
 import AssetsSpec(TestGameAssets(..))
 import ObjectsSpec(TestObject(..), TestObjectSpeed(..))
@@ -34,12 +33,13 @@ spec = do
     isPlayerShotSpec
     moveProjectileSpec
     moveProjectileQuickCheckSpec
-    insideScreenOrAboveProjectileSpec
+    insideScreenProjectileSpec
     getTranslatedProjectileAssetQuickCheckSpec
     invariantLawsSpec
     renderableLawSpec
     collidableLawsSpec
 
+-- Initializes Projectiles veryfing their invariant
 newtype TestProjectile = TestProjectile { getProjectile :: Projectile }deriving (Eq, Show)
 instance Arbitrary TestProjectile where
     arbitrary :: Gen TestProjectile
@@ -233,31 +233,36 @@ moveProjectileQuickCheckSpec = do
                     in prop_inv_projectile proj' && (prop_post_moveProjectile proj ss)
             )
 
-insideScreenOrAboveProjectileSpec :: Spec
-insideScreenOrAboveProjectileSpec = do
-    describe "insideScreenOrAboveProjectile (unit tests)" $ do
-        it "player projectile above screen is *inside or above*" $ do
+insideScreenProjectileSpec :: Spec
+insideScreenProjectileSpec = do
+    describe "insideScreenProjectile (inside for enemy shots above screen) (unit tests)" $ do
+        it "player projectile above the screen is outside" $ do
             let asset = 0
                 pId = 1
                 d = 1
                 ps = (startInitPlayerShot 0 (topYScreenBound + 500) (initObjectSpeed 1) asset d pId)
-            insideScreenOrAboveProjectile ps `shouldBe` True
+            insideScreenProjectile ps `shouldBe` False
         it "player projectile at the center of the screen is inside" $ do
             let asset = 0
                 pId = 1
                 d = 1
                 ps = startInitPlayerShot 0 0 (initObjectSpeed 1) asset d pId
-            insideScreenOrAboveProjectile ps `shouldBe` True
+            insideScreenProjectile ps `shouldBe` True
+        it "enemy projectile above the screen is inside" $ do
+            let asset = 0
+                d = 10
+                es = startInitEnemyShot 0 (bottomYScreenBound + 500) (initObjectSpeed 1) asset d
+            insideScreenProjectile es `shouldBe` True
         it "enemy projectile below the screen is outside" $ do
             let asset = 0
                 d = 10
                 es = startInitEnemyShot 0 (bottomYScreenBound - 500) (initObjectSpeed 1) asset d
-            insideScreenOrAboveProjectile es `shouldBe` False
+            insideScreenProjectile es `shouldBe` False
         it "enemy projectile at the center of the screen is inside" $ do
             let asset = 0
                 d = 10
                 es = startInitEnemyShot 0 0 (initObjectSpeed 1) asset d
-            insideScreenOrAboveProjectile es `shouldBe` True
+            insideScreenProjectile es `shouldBe` True
 
 getTranslatedProjectileAssetQuickCheckSpec :: Spec
 getTranslatedProjectileAssetQuickCheckSpec = do
@@ -274,23 +279,18 @@ getTranslatedProjectileAssetQuickCheckSpec = do
 invariantLawsSpec :: Spec
 invariantLawsSpec = do
     describe "Invariant laws (QuickCheck)" $ do
-
         it "law_invariant_stable for Projectile" $
             property (
-                \(TestProjectile proj) ->
-                    law_invariant_stable proj
+                \(TestProjectile proj) -> law_invariant_stable proj
             )
-
         it "law_invariant_idempotent for Projectile" $
             property (
-                \(TestProjectile proj) ->
-                    law_invariant_idempotent proj
+                \(TestProjectile proj) -> law_invariant_idempotent proj
             )
 
 renderableLawSpec :: Spec
 renderableLawSpec = do
     describe "Renderable laws (QuickCheck)" $ do
-
         it "law_renderable_finite for Projectile" $
             property (\(TestGameAssets ga) (TestProjectile proj) ->
                 law_renderable_finite ga proj
@@ -299,33 +299,27 @@ renderableLawSpec = do
 collidableLawsSpec :: Spec
 collidableLawsSpec = do
     describe "Collidable laws (QuickCheck)" $ do
-
         it "law_collidable_reflexive for Projectile" $
-            property ( \(TestProjectile proj) ->
-                prop_inv_projectile proj ==>
-                law_collidable_reflexive proj
+            property (\(TestProjectile proj) ->
+                prop_inv_projectile proj ==> law_collidable_reflexive proj
             )
-
         it "law_collidable_symmetric for Projectile with another Projectile" $
-            property ( \(TestProjectile proj1) (TestProjectile proj2) ->
-                prop_inv_projectile proj1 && prop_inv_projectile proj2 ==>
-                law_collidable_symmetric proj1 proj2
+            property (\(TestProjectile proj1) (TestProjectile proj2) ->
+                prop_inv_projectile proj1 && prop_inv_projectile proj2 
+                ==> law_collidable_symmetric proj1 proj2
             )
-
         it "law_collidable_symmetric for Projectile with another Object" $
-            property ( \(TestProjectile proj1) (TestObject o2) ->
-                prop_inv_projectile proj1 && prop_inv_object o2 ==>
-                law_collidable_symmetric proj1 o2
+            property (\(TestProjectile proj1) (TestObject o2) ->
+                prop_inv_projectile proj1 && prop_inv_object o2 
+                ==> law_collidable_symmetric proj1 o2
             )
-
         it "law_collidable_will_collide for Projectile with another Projectile" $
-            property ( \(TestProjectile proj1) (TestProjectile proj2) ->
-                prop_inv_projectile proj1 && prop_inv_projectile proj2 ==>
-                law_collidable_will_collide proj1 proj2
+            property (\(TestProjectile proj1) (TestProjectile proj2) ->
+                prop_inv_projectile proj1 && prop_inv_projectile proj2 
+                ==> law_collidable_will_collide proj1 proj2
             )
-
         it "law_collidable_will_collide for Projectile with another Object" $
-            property ( \(TestProjectile proj1) (TestObject o2) ->
-                prop_inv_projectile proj1 && prop_inv_object o2 ==>
-                law_collidable_will_collide proj1 o2
+            property (\(TestProjectile proj1) (TestObject o2) ->
+                prop_inv_projectile proj1 && prop_inv_object o2 
+                ==> law_collidable_will_collide proj1 o2
             )

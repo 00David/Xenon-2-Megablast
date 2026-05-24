@@ -110,9 +110,12 @@ prop_post_moveProjectile proj ss =
         ((EnemyShot _ asset d), (EnemyShot _ asset' d')) -> asset == asset' && d == d'
         _ -> False
 
--- Indicates if a projectile is inside the screen or above.
-insideScreenOrAboveProjectile :: Projectile -> Bool
-insideScreenOrAboveProjectile proj = insideScreenOrAboveHitbox (objectHitbox (projectileObject proj))
+-- Indicates if a projectile is inside the screen.
+-- For enemy projectiles, it can also be above (considering that they can go only towards the bottom).
+insideScreenProjectile :: Projectile -> Bool
+insideScreenProjectile proj = 
+    if isPlayerShot proj then insideScreenHitbox (objectHitbox (projectileObject proj))
+    else insideScreenOrAboveHitbox (objectHitbox (projectileObject proj))
 
 -- ============================================================
 -- ================= PROJECTILE INVARIANT =====================
@@ -153,7 +156,7 @@ instance Movable Projectile where
     move = moveProjectile
 
     insideScreen :: Projectile -> Bool
-    insideScreen = insideScreenOrAboveProjectile
+    insideScreen = insideScreenProjectile
 
 -- ============================================================
 -- ================= PROJECTILE COLLIDABLE ====================
@@ -171,7 +174,5 @@ instance Collidable Projectile where
 
     willCollide :: Collidable b => Projectile -> b -> ScreenScrollingSpeed -> Bool  
     willCollide projectile other screenSpeed =
-        let objs1 = getObjects projectile
-            objs2 = getObjects other
-            movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
-        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
+        let projectileMoved = move projectile screenSpeed
+        in collision projectileMoved other

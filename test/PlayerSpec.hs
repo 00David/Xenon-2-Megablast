@@ -19,7 +19,6 @@ import Objects.Hitbox
 import Objects.Objects
 import Typeclasses.Damageable
 import Typeclasses.Invariant
-import Typeclasses.Movable
 import AssetsSpec(TestGameAssets(..))
 import ObjectsSpec(TestObject(..), TestDirection(..), TestObjectSpeed(..))
 
@@ -48,6 +47,8 @@ spec = do
     incrementShootFrameCounterSpec
     getTranslatedPlayerAssetQuickCheckSpec
     getTranslatedBoosterAssetsQuickCheckSpec
+    takeDamagePlayerSpec
+    takeDamagePlayerQuickCheckSpec
     invariantLawsSpec
     renderableLawSpec
     collidableLawsSpec
@@ -119,6 +120,7 @@ genDeadPlayer = do
     
     return $ TestPlayer (initDeadPlayer playerObj pId score frameCpt phase)
 
+-- Initializes Players veryfing their invariant
 instance Arbitrary TestPlayer where
     arbitrary :: Gen TestPlayer
     arbitrary = oneof [
@@ -127,6 +129,7 @@ instance Arbitrary TestPlayer where
         genDeadPlayer
         ]
 
+-- Corresponds to the exact Player state taken as an input of the aliveToInvinciblePlayerSpec
 genAliveToInvinciblePlayer :: Gen TestPlayer
 genAliveToInvinciblePlayer = do
     pId <- choose (1,2)
@@ -161,7 +164,7 @@ prop_initAlivePlayer_preservesInvariant (TestObject obj) =
         let
             psb = NoBonus
             pTMP = AliveP obj pId lifes health score psb frameShootCpt frameRedCpt
-        in insideScreenPlayer pTMP ==>
+        in insideScreenPlayer pTMP ==> -- filter by keeping only objects inside screen bounds
             prop_inv_player (initAlivePlayer obj pId lifes health score psb frameShootCpt frameRedCpt)
 
 prop_initInvinciblePlayer_preservesInvariant :: TestObject -> Property
@@ -176,7 +179,7 @@ prop_initInvinciblePlayer_preservesInvariant (TestObject obj) =
         let
             psb = NoBonus
             pTMP = InvincibleP obj pId lifes health score psb frameShootCpt frameCpt
-        in insideScreenPlayer pTMP ==>
+        in insideScreenPlayer pTMP ==> -- filter by keeping only objects inside screen bounds
             prop_inv_player (initInvinciblePlayer obj pId lifes health score psb frameShootCpt frameCpt)
 
 prop_initDeadPlayer_preservesInvariant :: TestObject -> Property
@@ -187,7 +190,7 @@ prop_initDeadPlayer_preservesInvariant (TestObject obj) =
     forAll (choose (0, nbPlayerExplosionAssets)) $ \phase ->
         let
             pTMP = DeadP obj pId score frameCpt phase
-        in insideScreenPlayer pTMP ==>
+        in insideScreenPlayer pTMP ==> -- filter by keeping only objects inside screen bounds
             prop_inv_player (initDeadPlayer obj pId score frameCpt phase)
 
 prop_startInitAlivePlayer_preservesInvariant :: Property
@@ -393,11 +396,12 @@ movePlayerSpec = do
                 po' = playerObject p'
             centerHitbox (objectHitbox po') `shouldBe` (5, 0)
 
-        it "does not move dead player" $ do
-            let po = initPlayerObject 0 0 (initDirection 1 0) (initObjectSpeed 5)
+        it "moves invincible player according to direction and speed" $ do
+            let po = initPlayerObject 0 0 (initDirection 0 (-1)) (initObjectSpeed 3)
                 p = initDeadPlayer po 1 100 1 0
                 p' = movePlayer p 0
-            p' `shouldBe` p
+                po' = playerObject p'
+            centerHitbox (objectHitbox po') `shouldBe` (0, (-3))
 
 movePlayerQuickCheckSpec :: Spec
 movePlayerQuickCheckSpec = do
@@ -470,6 +474,55 @@ getTranslatedBoosterAssetsQuickCheckSpec = do
                 ==> prop_post_getTranslatedBoosterAssets ga player
             )
 
+takeDamagePlayerSpec :: Spec
+takeDamagePlayerSpec = do
+    describe "takeDamage (unit tests)" $ do
+        it "does not modify alive player with zero damage" $ do
+            let p = startInitAlivePlayer 1
+            takeDamage 0 p `shouldBe` p
+        it "decreases health for alive player without losing a life" $ do
+            let p = startInitAlivePlayer 1 -- starts with 3 lifes, 100 health points
+                p' = takeDamage 30 p -- take 30 damages
+            case p' of
+                AliveP _ _ lifes health _ _ _ _ -> do
+                    lifes `shouldBe` 3
+                    health `shouldBe` 70
+                _ -> expectationFailure "Expected AliveP"
+        it "switches alive player to invincible after losing a life" $ do
+            let p = startInitAlivePlayer 1 -- starts with 3 lifes, 100 health points
+                p' = takeDamage 120 p
+            case p' of
+                InvincibleP _ _ lifes health _ _ _ _ -> do
+                    lifes `shouldBe` 2 -- now has 2 remaining lifes
+                    health `shouldBe` 100 -- with health reseted at 100
+                _ -> expectationFailure "Expected InvincibleP"
+        it "kills player after losing last life" $ do
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p = initAlivePlayer po 1 1 100 0 NoBonus 1 0 -- alive with 1 life, 100 health points
+                p' = takeDamage 100 p
+            case p' of
+                DeadP _ _ _ _ _ -> True `shouldBe` True -- player became dead
+                _ -> expectationFailure "Expected DeadP"
+        it "does not damage invincible player" $ do
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p = initInvinciblePlayer po 1 2 100 0 NoBonus 1 1 -- invincible, with 2 lifes, 100 health points
+            takeDamage 50 p `shouldBe` p -- does not change on damages reception
+        it "does not damage dead player" $ do
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p = initDeadPlayer po 1 0 1 0 -- dead
+            takeDamage 50 p `shouldBe` p -- does not change on damages reception
+
+takeDamagePlayerQuickCheckSpec :: Spec
+takeDamagePlayerQuickCheckSpec = do
+    describe "takeDamage (QuickCheck)" $ do
+        it "satisfies takeDamage post-condition for all valid parameters" $
+            property (\(TestPlayer p) ->
+                forAll (choose (-30, 200)) $ \damage ->
+                prop_inv_player p
+                ==> let p' = takeDamage damage p
+                    in prop_inv_player p' && prop_post_takeDamagePlayer damage p
+            )
+
 -- ============================================================
 -- ======================== LAWS ==============================
 -- ============================================================
@@ -479,14 +532,12 @@ invariantLawsSpec = do
     describe "Invariant laws (QuickCheck)" $ do
         it "law_invariant_stable for Player" $
             property (
-                \(TestPlayer player) ->
-                    law_invariant_stable player
+                \(TestPlayer player) -> law_invariant_stable player
             )
 
         it "law_invariant_idempotent for Player" $
             property (
-                \(TestPlayer player) ->
-                    law_invariant_idempotent player
+                \(TestPlayer player) -> law_invariant_idempotent player
             )
 
 renderableLawSpec :: Spec
@@ -501,33 +552,29 @@ collidableLawsSpec :: Spec
 collidableLawsSpec = do
     describe "Collidable laws (QuickCheck)" $ do
         it "law_collidable_reflexive for Player" $
-            property ( \(TestPlayer p) ->
-                prop_inv_player p ==>
-                law_collidable_reflexive p
+            property (\(TestPlayer p) ->
+                prop_inv_player p 
+                ==> law_collidable_reflexive p
             )
-
         it "law_collidable_symmetric for Player with another Player" $
-            property ( \(TestPlayer p1) (TestPlayer p2) ->
-                prop_inv_player p1 && prop_inv_player p2 ==>
-                law_collidable_symmetric p1 p2
+            property (\(TestPlayer p1) (TestPlayer p2) ->
+                prop_inv_player p1 && prop_inv_player p2 
+                ==> law_collidable_symmetric p1 p2
             )
-
         it "law_collidable_symmetric for Player with another Object" $
-            property ( \(TestPlayer p) (TestObject o) ->
-                prop_inv_player p && prop_inv_object o ==>
-                law_collidable_symmetric p o
+            property (\(TestPlayer p) (TestObject o) ->
+                prop_inv_player p && prop_inv_object o 
+                ==> law_collidable_symmetric p o
             )
-
         it "law_collidable_will_collide for Player with another Player" $
-            property ( \(TestPlayer p1) (TestPlayer p2) ->
-                prop_inv_player p1 && prop_inv_player p2 ==>
-                law_collidable_will_collide p1 p2
+            property (\(TestPlayer p1) (TestPlayer p2) ->
+                prop_inv_player p1 && prop_inv_player p2 
+                ==> law_collidable_will_collide p1 p2
             )
-
         it "law_collidable_will_collide for Player with another Object" $
-            property ( \(TestPlayer p) (TestObject o) ->
-                prop_inv_player p && prop_inv_object o ==>
-                law_collidable_will_collide p o
+            property (\(TestPlayer p) (TestObject o) ->
+                prop_inv_player p && prop_inv_object o
+                ==> law_collidable_will_collide p o
             )
 
 damageableLawsSpec :: Spec
@@ -536,25 +583,22 @@ damageableLawsSpec = do
         it "law_damageable_dead_stays_dead for Player" $
             property (\(TestPlayer p) ->
                 forAll (choose (1, 100)) $ \damage ->
-                    prop_inv_player p ==>
-                    law_damageable_dead_stays_dead damage p
+                    prop_inv_player p 
+                    ==> law_damageable_dead_stays_dead damage p
             )
-
         it "law_damageable_dead_idempotent for Player" $
             property (\(TestPlayer p) ->
                 forAll (choose (1, 100)) $ \damage1 ->
                 forAll (choose (1, 100)) $ \damage2 ->
-                    prop_inv_player p ==>
-                    law_damageable_dead_idempotent damage1 damage2 p
+                    prop_inv_player p 
+                    ==> law_damageable_dead_idempotent damage1 damage2 p
             )
-
         it "law_damageable_zero_damage_identity for Player" $
             property (\(TestPlayer p) ->
-                prop_inv_player p ==>
-                law_damageable_zero_damage_identity p
+                prop_inv_player p 
+                ==> law_damageable_zero_damage_identity p
             )
-
-        it "law_damageable_zero_damage_identity for Player" $
+        it "law_damageable_no_heal_negative_damage for Player" $
             property (\(TestPlayer p) ->
                 forAll (choose (-100, -1)) $ \damage ->
                     prop_inv_player p ==>

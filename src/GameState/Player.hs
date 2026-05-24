@@ -1,8 +1,6 @@
 {-# LANGUAGE InstanceSigs #-}
 module GameState.Player (module GameState.Player) where
 
-import Debug.Trace (trace)
-
 import Graphics.Gloss (Picture(Translate, Rotate))
 
 import qualified Data.Sequence as Seq
@@ -328,7 +326,8 @@ movePlayer p@(AliveP po pId lifes health score psb frameShootCpt frameRedCpt) ss
                 movedPo = moveObject newPo ss
             in initAlivePlayer movedPo pId lifes health score psb frameShootCpt frameRedCpt
         else p
-movePlayer p@(InvincibleP po pId lifes health score psb frameShootCpt frameCpt) ss = -- same as for alive
+-- same as for alive
+movePlayer p@(InvincibleP po pId lifes health score psb frameShootCpt frameCpt) ss =
     let 
         (Direction dirX dirY) = objectDirection po
         (ObjectSpeed s) = objectSpeed po
@@ -362,7 +361,42 @@ movePlayer p@(InvincibleP po pId lifes health score psb frameShootCpt frameCpt) 
                 movedPo = moveObject newPo ss
             in initInvinciblePlayer movedPo pId lifes health score psb frameShootCpt frameCpt
         else p
-movePlayer p@(DeadP _ _ _ _ _) _ = p
+-- same as for alive, even a dead player must move to verify collidable laws
+-- (in fact, we never call this function on a dead player)
+movePlayer p@(DeadP po pId score frameCpt phase) ss =
+    let 
+        (Direction dirX dirY) = objectDirection po
+        (ObjectSpeed s) = objectSpeed po
+        (x, y) = centerHitbox (objectHitbox po)
+        
+        -- Calculate potential new positions after movement
+        dx = (fromIntegral dirX) * s
+        dy = (fromIntegral dirY) * s
+        newX = x + dx
+        newY = y + dy
+        
+        -- Screen bounds
+        leftBound = leftXScreenBound + (widthPlayer / 2)
+        rightBound = rightXScreenBound - (widthPlayer / 2)
+        topBound = topYScreenBound - (heightPlayer / 2)
+        bottomBound = bottomYScreenWithBarBound + (heightPlayer / 2)
+        
+        -- Check each direction independently
+        xInsideAfter = newX >= leftBound && newX <= rightBound
+        yInsideAfter = newY >= bottomBound && newY <= topBound
+        
+        -- Keep only valid directions
+        finalDirX = if xInsideAfter then dirX else 0
+        finalDirY = if yInsideAfter then dirY else 0
+        
+    in if (finalDirX /= 0 || finalDirY /= 0)
+        then
+            let 
+                finalDirection = initDirection finalDirX finalDirY
+                newPo = initMovableObject (objectHitbox po) finalDirection (objectSpeed po)
+                movedPo = moveObject newPo ss
+            in initDeadPlayer movedPo pId score frameCpt phase
+        else p
 
 prop_pre_movePlayer :: Player -> ScreenScrollingSpeed -> Bool
 prop_pre_movePlayer _ ss = ss >= 0 --screen scrolling speed positive
@@ -382,9 +416,13 @@ prop_post_movePlayer p@(InvincibleP _ pId lifes health score psb frameShootCpt f
             pId' == pId && lifes' == lifes && health' == health && score' == score && psb' == psb 
             && frameShootCpt' == frameShootCpt && frameCpt' == frameCpt
         _ -> False
-prop_post_movePlayer p@(DeadP _ _ _ _ _) ss = 
+prop_post_movePlayer p@(DeadP _ pId score frameCpt phase) ss = 
     let newP = movePlayer p ss
-    in p == newP -- no movement so same player
+    in case newP of -- ensures that all attributes stay the same, except for the object
+        (DeadP _ pId' score' frameCpt' phase') -> 
+            pId' == pId && score' == score && frameCpt' == frameCpt 
+            && phase' == phase
+        _ -> False
 
 -- Indicates if a player is inside the screen (by considering the bottom bar as the bottom limit of the screen)
 -- ALWAYS at true because part of the Player invariant, no need to test it.
@@ -688,10 +726,8 @@ instance Collidable Player where
 
     willCollide :: Collidable b => Player -> b -> ScreenScrollingSpeed -> Bool  
     willCollide player other screenSpeed =
-        let objs1 = getObjects player
-            objs2 = getObjects other
-            movedObjs1 = map (\o -> moveObject o screenSpeed) objs1
-        in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
+        let playerMoved = move player screenSpeed
+        in collision playerMoved other
 
 -- ============================================================
 -- ==================== PLAYER DAMAGEABLE =====================
@@ -714,3 +750,36 @@ instance Damageable Player where
                         if newLifes > 0 then (aliveToInvinciblePlayer p) -- health restored at 100 | player becomes temporary invincible
                         else (initDeadPlayer obj pId score 1 0) -- dead
     takeDamage _ p = p -- Invincible and Dead players don't take damages
+
+prop_post_takeDamagePlayer :: Damage -> Player -> Bool
+prop_post_takeDamagePlayer d p =
+    let p' = takeDamage d p
+    in case (p, p') of
+        -- Alive : damages null or negative, player unchanged
+        (alive@(AliveP _ _ _ _ _ _ _ _), alive')
+            | d <= 0 -> alive == alive'
+
+        -- Alive : alive after damages without losing a life
+        (AliveP obj1 pId1 l1 h1 s1 psb1 fSCpt1 _, AliveP obj2 pId2 l2 h2 s2 psb2 fSCpt2 red2)
+            | d > 0 && (h1 - d) > 0 -> 
+                obj1 == obj2 && pId1 == pId2 && l1 == l2 && h2 == (h1-d)
+                && s1 == s2 && psb1 == psb2 && fSCpt1 == fSCpt2 && red2 == 1 -- red frames counter started at 1
+
+        -- Alive : alive after damages but loses a life
+        (AliveP obj1 pId1 l1 h1 s1 psb1 fSCpt1 _, InvincibleP obj2 pId2 l2 h2 s2 psb2 fSCpt2 frame2)
+            | d > 0 && (h1-d) <= 0 && (l1-1) > 0 ->
+                obj1 == obj2 && pId1 == pId2 && l2 == (l1-1) && h2 == 100
+                && s1 == s2 && psb1 == psb2 && fSCpt1 == fSCpt2 && frame2 == 1 -- invincible frame counter started at 1
+
+        -- Alive : last life lost after damages, becomes DEAD
+        (AliveP obj1 pId1 l1 h1 s1 _ _ _, DeadP obj2 pId2 s2 frame2 phase2)
+            | d > 0 && (h1-d) <= 0 && (l1-1) <= 0 ->
+                obj1 == obj2 && pId1 == pId2 && s1 == s2 && frame2 == 1 && phase2 == 0 -- frame counter started at 1, with explosion animation phase started at 0
+
+        -- Invincible : no damages taken, don't change
+        (inv@(InvincibleP _ _ _ _ _ _ _ _), inv') -> inv == inv'
+
+        -- Dead : no damages taken, don't change
+        (dead@(DeadP _ _ _ _ _), dead') -> dead == dead'
+
+        _ -> False

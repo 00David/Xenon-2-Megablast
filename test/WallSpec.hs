@@ -2,6 +2,9 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module WallSpec (
+    TestFiniteWall(..),
+    TestInfiniteWall(..),
+    TestGameWalls(..),
     spec
 )
 where
@@ -18,7 +21,6 @@ import GameState.Wall
 import Objects.Hitbox
 import Objects.Objects
 import Typeclasses.Invariant
-import RockSpec(TestRock(..))
 import ObjectsSpec(TestObject(..))
 
 spec :: Spec
@@ -55,6 +57,7 @@ spec = do
 -- =================== FINITE WALLS ===========================
 -- ============================================================
 
+-- Initializes Finite Wall of rocks veryfing their invariant
 newtype TestFiniteWall a = TestFiniteWall { getFiniteWall :: FiniteWall a } deriving (Eq, Show)
 instance Arbitrary (TestFiniteWall Rock) where
     arbitrary :: Gen (TestFiniteWall Rock)
@@ -206,48 +209,47 @@ invariantFiniteLawsSpec = do
     describe "Invariant laws (QuickCheck)" $ do
         it "law_invariant_stable for FiniteWall Rock" $
             property (
-                \(TestFiniteWall wall::TestFiniteWall Rock) ->
-                    law_invariant_stable wall
+                \(TestFiniteWall wall::TestFiniteWall Rock) -> law_invariant_stable wall
             )
         it "law_invariant_idempotent for FiniteWall Rock" $
             property (
-                \(TestFiniteWall wall::TestFiniteWall Rock) ->
-                    law_invariant_idempotent wall
+                \(TestFiniteWall wall::TestFiniteWall Rock) -> law_invariant_idempotent wall
             )
 
 collidableFiniteLawsSpec :: Spec
 collidableFiniteLawsSpec = do
     describe "Collidable laws (QuickCheck)" $ do
         it "law_collidable_reflexive for FiniteWall Rock" $
-            property ( \(TestFiniteWall wall::TestFiniteWall Rock) ->
-                prop_inv_finiteWall wall ==>
-                law_collidable_reflexive wall
+            property (\(TestFiniteWall wall::TestFiniteWall Rock) ->
+                prop_inv_finiteWall wall 
+                ==> law_collidable_reflexive wall
             )
         it "law_collidable_symmetric for FiniteWall Rock with another FiniteWall Rock" $
-            property ( \(TestFiniteWall wall::TestFiniteWall Rock) (TestFiniteWall wall2::TestFiniteWall Rock) ->
-                prop_inv_finiteWall wall && prop_inv_finiteWall wall2 ==>
-                law_collidable_symmetric wall wall2
+            property (\(TestFiniteWall wall::TestFiniteWall Rock) (TestFiniteWall wall2::TestFiniteWall Rock) ->
+                prop_inv_finiteWall wall && prop_inv_finiteWall wall2 
+                ==> law_collidable_symmetric wall wall2
             )
         it "law_collidable_symmetric for FiniteWall Rock with another Object" $
-            property ( \(TestFiniteWall wall::TestFiniteWall Rock) (TestObject o2) ->
-                prop_inv_finiteWall wall && prop_inv_object o2 ==>
-                law_collidable_symmetric wall o2
+            property (\(TestFiniteWall wall::TestFiniteWall Rock) (TestObject o2) ->
+                prop_inv_finiteWall wall && prop_inv_object o2 
+                ==> law_collidable_symmetric wall o2
             )
         it "law_collidable_will_collide for FiniteWall Rock with another FiniteWall Rock" $
-            property ( \(TestFiniteWall wall1::TestFiniteWall Rock) (TestFiniteWall wall2::TestFiniteWall Rock) ->
-                prop_inv_finiteWall wall1 && prop_inv_finiteWall wall2 ==>
-                law_collidable_will_collide wall1 wall2
+            property (\(TestFiniteWall wall1::TestFiniteWall Rock) (TestFiniteWall wall2::TestFiniteWall Rock) ->
+                prop_inv_finiteWall wall1 && prop_inv_finiteWall wall2 
+                ==> law_collidable_will_collide wall1 wall2
             )
         it "law_collidable_will_collide for FiniteWall Rock with another Object" $
-            property ( \(TestFiniteWall wall::TestFiniteWall Rock) (TestObject o2) ->
-                prop_inv_finiteWall wall && prop_inv_object o2 ==>
-                law_collidable_will_collide wall o2
+            property (\(TestFiniteWall wall::TestFiniteWall Rock) (TestObject o2) ->
+                prop_inv_finiteWall wall && prop_inv_object o2 
+                ==> law_collidable_will_collide wall o2
             )
 
 -- ============================================================
 -- ================== INFINITE WALLS ==========================
 -- ============================================================
 
+-- Initializes Infinite Wall of rocks veryfing their invariant
 newtype TestInfiniteWall a = TestInfiniteWall { getInfiniteWall :: InfiniteWall a } deriving (Eq, Show)
 instance Arbitrary (TestInfiniteWall Rock) where
     arbitrary :: Gen (TestInfiniteWall Rock)
@@ -318,56 +320,61 @@ invariantInfiniteLawsSpec = do
     describe "Invariant laws (QuickCheck)" $ do
         it "law_invariant_stable for InfiniteWall Rock" $
             property (
-                \(TestInfiniteWall wall::TestInfiniteWall Rock) ->
-                    law_invariant_stable wall
+                \(TestInfiniteWall wall::TestInfiniteWall Rock) -> law_invariant_stable wall
             )
         it "law_invariant_idempotent for InfiniteWall Rock" $
             property (
-                \(TestInfiniteWall wall::TestInfiniteWall Rock) ->
-                    law_invariant_idempotent wall
+                \(TestInfiniteWall wall::TestInfiniteWall Rock) -> law_invariant_idempotent wall
             )
 
 collidableInfiniteLawsSpec :: Spec
 collidableInfiniteLawsSpec = do
     describe "Collidable laws (QuickCheck)" $ do
         it "law_collidable_reflexive for InfiniteWall Rock" $
-            property ( \(TestInfiniteWall wall::TestInfiniteWall Rock) ->
-                prop_inv_infiniteWall wall ==>
-                law_collidable_reflexive wall
+            property (\(TestInfiniteWall wall::TestInfiniteWall Rock) ->
+                prop_inv_infiniteWall wall 
+                ==> law_collidable_reflexive wall
             )
         it "law_collidable_symmetric for InfiniteWall Rock with another InfiniteWall Rock" $
-            property ( \(TestInfiniteWall wall::TestInfiniteWall Rock) (TestInfiniteWall wall2::TestInfiniteWall Rock) ->
-                prop_inv_infiniteWall wall && prop_inv_infiniteWall wall2 ==>
-                law_collidable_symmetric wall wall2
+            property (\(TestInfiniteWall wall::TestInfiniteWall Rock) (TestInfiniteWall wall2::TestInfiniteWall Rock) ->
+                prop_inv_infiniteWall wall && prop_inv_infiniteWall wall2 
+                ==> law_collidable_symmetric wall wall2
             )
         it "law_collidable_symmetric for InfiniteWall Rock with another Object" $
-            property ( \(TestInfiniteWall wall::TestInfiniteWall Rock) (TestObject o2) ->
-                prop_inv_infiniteWall wall && prop_inv_object o2 ==>
-                law_collidable_symmetric wall o2
+            property (\(TestInfiniteWall wall::TestInfiniteWall Rock) (TestObject o2) ->
+                prop_inv_infiniteWall wall && prop_inv_object o2 
+                ==> law_collidable_symmetric wall o2
             )
         it "law_collidable_will_collide for InfiniteWall Rock with another InfiniteWall Rock" $
-            property ( \(TestInfiniteWall wall1::TestInfiniteWall Rock) (TestInfiniteWall wall2::TestInfiniteWall Rock) ->
-                prop_inv_infiniteWall wall1 && prop_inv_infiniteWall wall2 ==>
-                law_collidable_will_collide wall1 wall2
+            property (\(TestInfiniteWall wall1::TestInfiniteWall Rock) (TestInfiniteWall wall2::TestInfiniteWall Rock) ->
+                prop_inv_infiniteWall wall1 && prop_inv_infiniteWall wall2 
+                ==> law_collidable_will_collide wall1 wall2
             )
         it "law_collidable_will_collide for InfiniteWall Rock with another Object" $
-            property ( \(TestInfiniteWall wall::TestInfiniteWall Rock) (TestObject o2) ->
-                prop_inv_infiniteWall wall && prop_inv_object o2 ==>
-                law_collidable_will_collide wall o2
+            property (\(TestInfiniteWall wall::TestInfiniteWall Rock) (TestObject o2) ->
+                prop_inv_infiniteWall wall && prop_inv_object o2 
+                ==> law_collidable_will_collide wall o2
             )
 
 -- ============================================================
 -- ====================== GAME WALLS ==========================
 -- ============================================================
 
+-- Initializes Game Walls veryfing their invariant
 newtype TestGameWalls = TestGameWalls { getGameWalls :: GameWalls } deriving (Eq, Show)
 instance Arbitrary TestGameWalls where
     arbitrary :: Gen TestGameWalls
     arbitrary = do
         seed :: Int <- arbitrary
+
+        nFiniteWalls <- choose (0, 10)
+        finiteWalls <- vectorOf nFiniteWalls (getFiniteWall <$> arbitrary)
+
         let gen = mkStdGen seed
             gameWalls = startInitGameWalls gen
-        return (TestGameWalls gameWalls)
+            -- add a certain amount of finite walls
+            gameWalls' = foldl' addFiniteWall gameWalls finiteWalls
+        return (TestGameWalls gameWalls')
 
 prop_initGameWalls_preservesInvariant :: TestInfiniteWall Rock -> TestInfiniteWall Rock -> 
     TestInfiniteWall Rock -> TestInfiniteWall Rock -> [TestFiniteWall Rock] -> Property
@@ -423,40 +430,38 @@ invariantGameWallsLawsSpec = do
     describe "Invariant laws (QuickCheck)" $ do
         it "law_invariant_stable for GameWalls" $
             property (
-                \(TestGameWalls gw) ->
-                    law_invariant_stable gw
+                \(TestGameWalls gw) -> law_invariant_stable gw
             )
         it "law_invariant_idempotent for GameWalls" $
             property (
-                \(TestGameWalls gw) ->
-                    law_invariant_idempotent gw
+                \(TestGameWalls gw) -> law_invariant_idempotent gw
             )
 
 collidableGameWallsLawsSpec :: Spec
 collidableGameWallsLawsSpec = do
     describe "Collidable laws (QuickCheck)" $ do
         it "law_collidable_reflexive for GameWalls" $
-            property ( \(TestGameWalls gw) ->
-                prop_inv_gameWalls gw ==>
-                law_collidable_reflexive gw
+            property (\(TestGameWalls gw) ->
+                prop_inv_gameWalls gw 
+                ==> law_collidable_reflexive gw
             )
         it "law_collidable_symmetric for GameWalls with another GameWalls" $
-            property ( \(TestGameWalls gw1) (TestGameWalls gw2) ->
-                prop_inv_gameWalls gw1 && prop_inv_gameWalls gw2 ==>
-                law_collidable_symmetric gw1 gw2
+            property (\(TestGameWalls gw1) (TestGameWalls gw2) ->
+                prop_inv_gameWalls gw1 && prop_inv_gameWalls gw2 
+                ==> law_collidable_symmetric gw1 gw2
             )
         it "law_collidable_symmetric for GameWalls with another Object" $
-            property ( \(TestGameWalls gw1) (TestObject o2) ->
-                prop_inv_gameWalls gw1 && prop_inv_object o2 ==>
-                law_collidable_symmetric gw1 o2
+            property (\(TestGameWalls gw1) (TestObject o2) ->
+                prop_inv_gameWalls gw1 && prop_inv_object o2 
+                ==> law_collidable_symmetric gw1 o2
             )
         it "law_collidable_will_collide for GameWalls with another GameWalls" $
-            property ( \(TestGameWalls gw1) (TestGameWalls gw2) ->
-                prop_inv_gameWalls gw1 && prop_inv_gameWalls gw2 ==>
-                law_collidable_will_collide gw1 gw2
+            property (\(TestGameWalls gw1) (TestGameWalls gw2) ->
+                prop_inv_gameWalls gw1 && prop_inv_gameWalls gw2 
+                ==> law_collidable_will_collide gw1 gw2
             )
         it "law_collidable_will_collide for GameWalls with another Object" $
-            property ( \(TestGameWalls gw1) (TestObject o2) ->
-                prop_inv_gameWalls gw1 && prop_inv_object o2 ==>
-                law_collidable_will_collide gw1 o2
+            property (\(TestGameWalls gw1) (TestObject o2) ->
+                prop_inv_gameWalls gw1 && prop_inv_object o2 
+                ==> law_collidable_will_collide gw1 o2
             )

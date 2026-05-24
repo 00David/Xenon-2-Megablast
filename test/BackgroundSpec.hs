@@ -25,6 +25,7 @@ spec = do
     invariantLawsSpec
     renderableLawSpec
 
+-- Initializes Backgrounds veryfing their invariant
 newtype TestBackground = TestBackground { getBackground :: Background } deriving (Eq, Show)
 instance Arbitrary TestBackground where
     arbitrary :: Gen TestBackground
@@ -86,24 +87,19 @@ getTranslatedBackgroundsQuickCheckSpec = do
 invariantLawsSpec :: Spec
 invariantLawsSpec = do
     describe "Invariant laws (QuickCheck)" $ do
-
         it "law_invariant_stable for Background" $
             property (
-                \(TestBackground bgnd) ->
-                    law_invariant_stable bgnd
+                \(TestBackground bgnd) -> law_invariant_stable bgnd
             )
 
         it "law_invariant_idempotent for Background" $
             property (
-                \(TestBackground bgnd) ->
-                    law_invariant_idempotent bgnd
+                \(TestBackground bgnd) -> law_invariant_idempotent bgnd
             )
 
 renderableLawSpec :: Spec
 renderableLawSpec = do
     describe "Renderable laws (QuickCheck)" $ do
-
         it "law_renderable_finite for Background" $
-            property (\(TestGameAssets ga) (TestBackground bg) ->
-                law_renderable_finite ga bg
+            property (\(TestGameAssets ga) (TestBackground bg) -> law_renderable_finite ga bg
             )
