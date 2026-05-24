@@ -1,3 +1,5 @@
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module HitboxSpec (
     TestHitbox(..),
     spec
@@ -7,28 +9,38 @@ where
 import Test.Hspec
 import Test.QuickCheck
 
+import GameSetup
 import Objects.Hitbox
+import Typeclasses.Invariant
 
 spec :: Spec
 spec = do
   initHitboxSpec
   partOfHitboxSpec
   centerHitboxSpec
+  centerHitboxQuickCheckSpec
   collisionHitboxSpec
   commutativityCollisionHitboxSpec
   moveHitboxSpec
   moveHitboxQuickCheckSpec
+  insideScreenHitboxSpec
+  insideScreenOrAboveHitboxSpec
+  clampSpec
+  clampQuickCheckSpec
+  invariantLawsSpec
 
 -- ============================================================
 -- ====================== OBJECT HITBOXES =====================
 -- ============================================================
 
+-- Initializes Hitboxes veryfing their invariant
 newtype TestHitbox = TestHitbox { getHitbox :: Hitbox } deriving (Eq, Show)
 instance Arbitrary TestHitbox where
-  arbitrary = oneof
-    [ TestHitbox <$> (Circle <$> arbitrary <*> arbitrary <*> (abs <$> arbitrary)) -- radius >= 0
-    , TestHitbox <$> (Rectangle <$> arbitrary <*> arbitrary <*> (getPositive <$> arbitrary) <*> (getPositive <$> arbitrary)) -- width > 0 && heigth > 0
-    , TestHitbox <$> genValidHitboxes] -- verifies Hitboxes invariants
+    arbitrary :: Gen TestHitbox
+    arbitrary = oneof
+        [ TestHitbox <$> (Circle <$> arbitrary <*> arbitrary <*> (abs <$> arbitrary)) -- radius >= 0
+        , TestHitbox <$> (Rectangle <$> arbitrary <*> arbitrary <*> (getPositive <$> arbitrary) <*> (getPositive <$> arbitrary)) -- width > 0 && heigth > 0
+        , TestHitbox <$> genValidHitboxes] -- verifies Hitboxes invariants
 
 genValidHitboxes :: Gen Hitbox
 genValidHitboxes = do
@@ -48,15 +60,15 @@ genValidHitboxes = do
     rest <- vectorOf n genAtomic
     return (Hitboxes x y (base : rest))
 
-prop_initHitboxCircle_preservesInvariant :: Float -> Float -> Float -> Property
+prop_initHitboxCircle_preservesInvariant :: XCenter -> YCenter -> Radius -> Property
 prop_initHitboxCircle_preservesInvariant x y r =
     r >= 0 ==> prop_inv_hitbox (initHitboxCircle x y r)
 
-prop_initHitboxRectangle_preservesInvariant :: Float -> Float -> Float -> Float -> Property
+prop_initHitboxRectangle_preservesInvariant :: XBottomLeft -> YBottomLeft -> Width -> Heigth -> Property
 prop_initHitboxRectangle_preservesInvariant x y w h =
     w > 0 && h > 0 ==> prop_inv_hitbox (initHitboxRectangle x y w h)
 
-prop_initHitboxes_preservesInvariant :: Float -> Float -> [TestHitbox] -> Property
+prop_initHitboxes_preservesInvariant :: XCenter -> YCenter -> [TestHitbox] -> Property
 prop_initHitboxes_preservesInvariant x y l = length l > 0
     && all prop_inv_hitbox (map getHitbox l)
     && any (partOfHitbox x y) (map getHitbox l) 
@@ -64,7 +76,7 @@ prop_initHitboxes_preservesInvariant x y l = length l > 0
 
 initHitboxSpec :: SpecWith ()
 initHitboxSpec = do
-    describe "initHitbox (unit tests)" $ do
+    describe "initHitbox (QuickCheck)" $ do
         it "preserves the Hitbox invariant for valid Circles" $
             property prop_initHitboxCircle_preservesInvariant
 
@@ -116,6 +128,15 @@ centerHitboxSpec = do
         it "returns the arbitrary fixed center of Hitboxes list" $ do
             let h = Hitboxes 0.5 0.5 [Circle 0 0 1, Rectangle 0 0 2 2]
             centerHitbox h `shouldBe` (0.5, 0.5)
+
+centerHitboxQuickCheckSpec :: Spec
+centerHitboxQuickCheckSpec = do
+    describe "centerHitbox (QuickCheck)" $ do
+        it "satisfies centerHitbox post-condition for all valid Hitbox(es)" $
+            property (\(TestHitbox h) ->
+                prop_inv_hitbox h 
+                ==> prop_post_centerHitbox h
+            )
 
 collisionHitboxSpec :: Spec
 collisionHitboxSpec = do
@@ -177,7 +198,7 @@ commutativityCollisionHitboxSpec = do
             property (\(TestHitbox h1) (TestHitbox h2) ->
                 (prop_inv_hitbox h1 && prop_inv_hitbox h2)
                 ==> prop_commutativity_collisionHitbox h1 h2
-                )
+            )
 
 moveHitboxSpec :: Spec
 moveHitboxSpec = do
@@ -205,4 +226,118 @@ moveHitboxQuickCheckSpec = do
                 prop_inv_hitbox h 
                 ==> let hPost = moveHitbox h (dx, dy)
                     in prop_inv_hitbox hPost && prop_post_moveHitbox h (dx, dy)
-                )
+            )
+
+insideScreenHitboxSpec :: Spec
+insideScreenHitboxSpec = do
+    describe "insideScreenHitbox (unit tests)" $ do
+
+        it "Circle completely inside screen" $ do
+            let c = Circle 0 0 50
+            insideScreenHitbox c `shouldBe` True
+
+        it "Circle outside left screen border" $ do
+            let c = Circle (leftXScreenBound-10) 0 20
+            insideScreenHitbox c `shouldBe` False
+
+        it "Rectangle completely inside screen" $ do
+            let r = Rectangle 0 0 50 50
+            insideScreenHitbox r `shouldBe` True
+
+        it "Rectangle partially outside right border" $ do
+            let r = Rectangle (rightXScreenBound-10) 0 50 50
+            insideScreenHitbox r `shouldBe` False
+
+        it "Hitboxes inside screen" $ do
+            let h = Hitboxes 0 0
+                        [Circle 0 0 20,
+                         Rectangle (-50) (-50) 20 20]
+
+            insideScreenHitbox h `shouldBe` True
+
+
+insideScreenOrAboveHitboxSpec :: Spec
+insideScreenOrAboveHitboxSpec = do
+    describe "insideScreenOrAboveHitbox (unit tests)" $ do
+
+        it "Circle inside screen" $ do
+            let c = Circle 0 0 50
+            insideScreenOrAboveHitbox c `shouldBe` True
+
+        it "Circle above screen but still valid" $ do
+            let c = Circle 0 (topYScreenBound+500) 10
+            insideScreenOrAboveHitbox c `shouldBe` True
+
+        it "Circle below screen" $ do
+            let c = Circle 0 (bottomYScreenBound-50) 10
+            insideScreenOrAboveHitbox c `shouldBe` False
+
+        it "Rectangle partially above screen" $ do
+            let r = Rectangle 0 topYScreenBound 50 200
+            insideScreenOrAboveHitbox r `shouldBe` True
+
+        it "Rectangle fully left of screen" $ do
+            let r = Rectangle (leftXScreenBound-100) 0 20 20
+            insideScreenOrAboveHitbox r `shouldBe` False
+
+clampSpec :: SpecWith ()
+clampSpec = do
+    describe "clamp (unit tests)" $ do
+        it "clamp on a value below the range, gives the range lower bound" $ do
+            (clamp (-5) 0 3) `shouldBe` (0::Int)
+
+        it "clamp on a value above the range, gives the range upper bound" $ do
+            (clamp 10 0 3) `shouldBe` (3::Int)
+
+        it "clamp on a value inside the range, gives the value" $ do
+            (clamp 2 0 3) `shouldBe` (2::Int)
+
+clampQuickCheckSpec :: Spec
+clampQuickCheckSpec = do
+    describe "clamp (QuickCheck)" $ do
+
+        it "returned value is always inside interval" $
+            property (
+                \(v::Int) a b ->
+                    let minV = min a b
+                        maxV = max a b
+                    in prop_post_clamp v minV maxV
+            )
+
+        it "identity when value already inside interval" $
+            property (
+                \(v::Int) ->
+                    clamp v (v-10) (v+10) == v
+            )
+
+        it "returns lower bound if below range" $
+            property (
+                \(v::Positive Int) ->
+                    clamp (-getPositive v) 0 10 == 0 -- (-getPositive v) necessarily < 0
+            )
+
+        it "returns upper bound if above range" $
+            property (
+                \(Positive v) ->
+                    clamp (v+10) 0 10 == (10::Int) -- (v+10) necessarily > 10
+            )
+
+-- ============================================================
+-- ======================== LAWS ==============================
+-- ============================================================
+
+invariantLawsSpec :: Spec
+invariantLawsSpec = do
+    describe "Invariant laws (QuickCheck)" $ do
+
+        it "law_invariant_stable" $
+            property (
+                \(TestHitbox h) ->
+                    law_invariant_stable h
+            )
+
+        it "law_invariant_idempotent" $
+            property (
+                \(TestHitbox h) ->
+                    law_invariant_idempotent h
+            )

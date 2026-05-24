@@ -19,6 +19,7 @@ import Typeclasses.Movable
 -- ====================== FINITE WALLS ========================
 -- ============================================================
 
+-- Checks that each collidable element of the list collides with the next one
 prop_wall_allCollideWithNext :: Collidable a => [a] -> Bool
 prop_wall_allCollideWithNext [] = True
 prop_wall_allCollideWithNext (_:[]) = True
@@ -42,24 +43,16 @@ prop_inv_finiteWall (FiniteWall l) = length l > 0
     && all prop_inv l
     && prop_wall_allCollideWithNext l
 
+-- ============================================================
+-- =============== FINITE WALL CONSTRUCTORS ===================
+-- ============================================================
+
 initFiniteWall :: (Invariant a, Collidable a) => [a] -> FiniteWall a
 initFiniteWall l
     | length l == 0 = error "a wall must have at least one collidable"
     | not (all prop_inv l) = error "each contained element must satisfy its invariant"
     | not (prop_wall_allCollideWithNext l) = error "collidable must collide with the next in the list"
     | otherwise = FiniteWall l
-
--- Filters a finite wall
-filterWall :: (a -> Bool) -> FiniteWall a -> FiniteWall a
-filterWall f (FiniteWall elems) = FiniteWall (filter f elems)
-
--- Moves a finite wall
-moveFiniteWall :: (Movable a) => FiniteWall a -> ScreenScrollingSpeed -> FiniteWall a
-moveFiniteWall w ss = (fmap (flip move ss) w)
-
--- Indicates if an entire finite wall is inside the screen
-insideScreenFiniteWall :: (Movable a) => FiniteWall a -> Bool
-insideScreenFiniteWall w = (all insideScreen w)
 
 -- Creates a random finite wall of rocks
 startFiniteWall :: StdGen -> (FiniteWall Rock, StdGen)
@@ -99,9 +92,38 @@ startFiniteWall gen =
         -- Creates an inidvidual rock object, part of the infinite wall
         -- First argument : left or right sided rock 
         -- Second argument : Y position
-        -- Third argument : a pair (number of the rock asset index, X position)
+        -- Third argument : a pair (rock asset index, X position)
         makeWallObject :: Bool -> YCoord -> (Int, XCoord) -> Rock
         makeWallObject leftSide y (numRock, x) = startInitRock x y numRock leftSide True
+
+-- ============================================================
+-- ================ FINITE WALL OPERATIONS ====================
+-- ============================================================
+
+-- Filters a finite wall
+filterWall :: (a -> Bool) -> FiniteWall a -> FiniteWall a
+filterWall f (FiniteWall elems) = FiniteWall (filter f elems)
+
+prop_post_filterWall :: (a -> Bool) -> FiniteWall a -> Bool
+prop_post_filterWall f wall@(FiniteWall elems) =
+    let (FiniteWall elems') = filterWall f wall
+    in length elems >= length elems' -- wall length can be reduced
+
+-- Moves a finite wall
+moveFiniteWall :: (Movable a) => FiniteWall a -> ScreenScrollingSpeed -> FiniteWall a
+moveFiniteWall w ss = (fmap (flip move ss) w)
+
+prop_pre_moveFiniteWall :: FiniteWall a -> ScreenScrollingSpeed -> Bool
+prop_pre_moveFiniteWall  _ ss = ss >= 0 -- scren scrolling speed must be positive
+
+prop_post_moveFiniteWall :: (Movable a) => FiniteWall a -> ScreenScrollingSpeed -> Bool
+prop_post_moveFiniteWall  wall@(FiniteWall elems) ss = 
+    let (FiniteWall elems') = moveFiniteWall wall ss
+    in length elems == length elems' -- wall length stays the same
+
+-- Indicates if an entire finite wall is inside the screen
+insideScreenFiniteWall :: (Movable a) => FiniteWall a -> Bool
+insideScreenFiniteWall w = (all insideScreen w)
 
 -- ============================================================
 -- ===================== INFINITE WALLS =======================
@@ -128,7 +150,11 @@ nbTakeInfiniteWalls = 20
 prop_inv_infiniteWall :: Invariant a => InfiniteWall a -> Bool
 prop_inv_infiniteWall (InfiniteWall l) =  -- only a sublist is checked
     let subList = take nbTakeInfiniteWalls l
-    in length subList > 0 && all prop_inv subList
+    in length subList > 0 && all prop_inv subList --each element of the sublist must verify its invariant
+
+-- ============================================================
+-- =============== INFINITE WALL CONSTRUCTOR ==================
+-- ============================================================
 
 -- Initializes an infinite wall of ROCKS
 initInfiniteWall :: Bool -> Bool -> StdGen -> InfiniteWall Rock
@@ -192,6 +218,10 @@ initInfiniteWall foreground left gen =
                         i -> error (show i++" out of bounds")
             in startInitRock x2 y numRock left foreground
 
+-- ============================================================
+-- =============== INFINITE WALL OPERATIONS ===================
+-- ============================================================
+
 -- Partially maps an infinite wall : it will apply a function only on a prefix of it
 partialMapWall :: forall a. (a -> a) -> InfiniteWall a -> InfiniteWall a
 partialMapWall f (InfiniteWall elems) = InfiniteWall (aux 0 elems)
@@ -213,13 +243,25 @@ partialFilterWall f (InfiniteWall elems) = InfiniteWall (aux 0 elems)
             | (f x) = x:(aux (i+1) xs)
             | otherwise = aux (i+1) xs
 
--- Converts an infinite wall to a finite wall, by only keeping a sub-part of it.
-infiniteToFiniteWall :: InfiniteWall a -> FiniteWall a
-infiniteToFiniteWall (InfiniteWall wallObjects) = (FiniteWall (take nbTakeInfiniteWalls wallObjects))
+-- Converts an infinite wall to a finite list, by only keeping a sub-part of the contained list. 
+infiniteWallToFiniteList :: InfiniteWall a -> [a]
+infiniteWallToFiniteList (InfiniteWall wallObjects) = (take nbTakeInfiniteWalls wallObjects)
+
+prop_post_infiniteWallToFiniteList :: InfiniteWall a -> Bool
+prop_post_infiniteWallToFiniteList wall = length (infiniteWallToFiniteList wall) == nbTakeInfiniteWalls -- necessarily the 'nbTakeInfiniteWalls' length
 
 -- Moves partially an infinite wall
 partialMoveInfiniteWall :: (Movable a) => InfiniteWall a -> ScreenScrollingSpeed -> InfiniteWall a
 partialMoveInfiniteWall w ss = (partialMapWall (flip move ss) w)
+
+prop_pre_partialMoveInfiniteWall :: InfiniteWall a -> ScreenScrollingSpeed -> Bool
+prop_pre_partialMoveInfiniteWall _ ss = ss >= 0 -- screen scrolling speed must be positive
+
+prop_post_partialMoveInfiniteWall :: (Eq a, Movable a) =>  InfiniteWall a -> ScreenScrollingSpeed -> Bool
+prop_post_partialMoveInfiniteWall w ss = 
+    let w' = partialMoveInfiniteWall w ss
+    -- partially move an infinite wall is equivalent to map the move function on the prefix of the infinite wall
+    in map (flip move ss) (infiniteWallToFiniteList w) == infiniteWallToFiniteList w'
 
 -- Indicates if a prefix of an infinite wall is inside the screen
 partialInsideScreenInfiniteWall :: (Movable a) => InfiniteWall a -> Bool
@@ -234,7 +276,7 @@ data GameWalls = GameWalls {
     gameBackgoundLeftWall :: InfiniteWall Rock,
     gameRightWall :: InfiniteWall Rock,
     gameBackgoundRightWall :: InfiniteWall Rock,
-    gameFiniteWalls :: [FiniteWall Rock] -- other walls than the default ones
+    gameFiniteWalls :: [FiniteWall Rock] -- other walls than the default ones, generated during the game
 } deriving (Eq, Show)
 
 prop_inv_gameWalls :: GameWalls -> Bool
@@ -242,6 +284,10 @@ prop_inv_gameWalls (GameWalls leftWall leftWall2 rightWall rightWall2 walls) =
     prop_inv_infiniteWall leftWall && prop_inv_infiniteWall leftWall2 &&
     prop_inv_infiniteWall rightWall && prop_inv_infiniteWall rightWall2 &&
     foldr (\w acc -> prop_inv_finiteWall w && acc) True walls
+
+-- ============================================================
+-- =============== GAME WALLS CONSTRUCTORS ====================
+-- ============================================================
 
 initGameWalls :: InfiniteWall Rock -> InfiniteWall Rock -> InfiniteWall Rock -> InfiniteWall Rock -> [FiniteWall Rock] -> GameWalls
 initGameWalls left1 left2 right1 right2 walls
@@ -264,6 +310,10 @@ startInitGameWalls gen =
         right2 = initInfiniteWall False False gen4
     in (GameWalls left1 left2 right1 right2 [])
 
+-- ============================================================
+-- ================= GAME WALLS OPERATIONS ====================
+-- ============================================================
+
 -- Moves game walls
 moveGameWalls :: GameWalls -> ScreenScrollingSpeed -> GameWalls
 moveGameWalls (GameWalls left1 left2 right1 right2 walls) ss =
@@ -276,6 +326,9 @@ moveGameWalls (GameWalls left1 left2 right1 right2 walls) ss =
     in 
         (initGameWalls newLeft1 newLeft2 newRight1 newRight2 newWalls)
 
+prop_pre_moveGameWalls :: GameWalls -> ScreenScrollingSpeed -> Bool
+prop_pre_moveGameWalls _ ss = ss >= 0 -- screen scrolling speed positive
+
 -- Indicates if game walls are inside of the screen
 insideScreenGameWalls :: GameWalls -> Bool
 insideScreenGameWalls (GameWalls left1 left2 right1 right2 walls) =
@@ -285,18 +338,16 @@ insideScreenGameWalls (GameWalls left1 left2 right1 right2 walls) =
     && insideScreen right2
     && all (all insideScreen) walls
 
+-- Adds a finite wall to the game walls
 addFiniteWall :: GameWalls -> FiniteWall Rock -> GameWalls
 addFiniteWall (GameWalls leftWall leftWall2 rightWall rightWall2 walls) newWall =
     initGameWalls leftWall leftWall2 rightWall rightWall2 (walls++[newWall])
 
-prop_pre_addFiniteWall :: GameWalls -> FiniteWall Rock -> Bool
-prop_pre_addFiniteWall _ newWall = length newWall > 0
-
 prop_post_addFiniteWall :: GameWalls -> FiniteWall Rock -> Bool
 prop_post_addFiniteWall gw@(GameWalls leftWall leftWall2 rightWall rightWall2 walls) newWall =
     let (GameWalls leftWall' leftWall2' rightWall' rightWall2' walls') = addFiniteWall gw newWall
-    in leftWall' == leftWall && leftWall2' == leftWall2 && rightWall' == rightWall && rightWall2' == rightWall2
-        && any (\w -> w == newWall) walls' && length walls' == ((length walls)+1)
+    in leftWall' == leftWall && leftWall2' == leftWall2 && rightWall' == rightWall && rightWall2' == rightWall2 -- every other (infinite) walls stay the same
+        && any (\w -> w == newWall) walls' && length walls' == ((length walls)+1) -- for the finite wall list, the new wall is into this list, having now one more element
 
 -- ============================================================
 -- ==================== WALLS INVARIANT =======================
@@ -349,7 +400,7 @@ instance (Renderable a) => Renderable (FiniteWall a) where
 
 instance (Renderable a) => Renderable (InfiniteWall a) where
     getTranslatedAssets :: GameAssets -> InfiniteWall a -> [Picture]
-    getTranslatedAssets ga wall = getTranslatedAssets ga (infiniteToFiniteWall wall)
+    getTranslatedAssets ga wall = concatMap (getTranslatedAssets ga) (infiniteWallToFiniteList wall)
 
 instance Renderable GameWalls where
     getTranslatedAssets :: GameAssets -> GameWalls -> [Picture]
@@ -387,7 +438,7 @@ instance (Collidable a) => Collidable (FiniteWall a) where
 
 instance (Collidable a) => Collidable (InfiniteWall a) where
     getObjects :: InfiniteWall a -> [Object]
-    getObjects wall = getObjects (infiniteToFiniteWall wall)
+    getObjects wall = concatMap getObjects (infiniteWallToFiniteList wall)
 
     collision :: Collidable b => InfiniteWall a -> b -> Bool
     collision wall other =

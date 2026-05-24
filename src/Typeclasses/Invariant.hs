@@ -15,4 +15,4 @@ law_invariant_idempotent :: Invariant a => a -> Bool
 law_invariant_idempotent x = prop_inv x == prop_inv x
 
 law_invariant_preserved :: (Invariant a, Invariant b) => (a -> b) -> a -> Property
-law_invariant_preserved f x = prop_inv x ==> prop_inv (f x)
+law_invariant_preserved f x = prop_inv x ==> prop_inv (f x) -- naturally checked by my QuickCheck tests on operations

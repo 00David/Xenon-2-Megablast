@@ -13,9 +13,9 @@ import GameState.Projectile
 import Graphics.Assets
 import Objects.Hitbox
 import Objects.Objects
-import Typeclasses.Damageable
 import Typeclasses.Invariant
 import Typeclasses.Movable
+import Typeclasses.Damageable
 
 -- ============================================================
 -- ========================= PLAYER ===========================
@@ -69,6 +69,10 @@ prop_inv_player p@(InvincibleP po pId lifes health score psb frameShootCpt frame
 prop_inv_player p@(DeadP po pId score frameCpt phase) = prop_inv_object po && (pId == 1 || pId == 2) && score >= 0
     && frameCpt >= 1 && frameCpt <= nbFramesPerExplosionPhase && phase >= 0 && phase <= nbPlayerExplosionAssets && insideScreenPlayer p
 
+-- ============================================================
+-- ================= PLAYER CONSTRUCTORS ======================
+-- ============================================================
+
 -- Creates the player composite hitbox, with given center coordinates
 playerHitbox :: XCoord -> YCoord -> Hitbox
 playerHitbox cx cy = 
@@ -121,7 +125,10 @@ initAlivePlayer po pId lifes health score psb frameShootCpt frameRedCpt
     | score < 0 = error "score must be positive"
     | frameShootCpt < 1 = error "frameShootCpt must be at least 1"
     | frameRedCpt < 0 || frameRedCpt > nbFramesRedOnDamage = error "frameRedCpt must be inside [0, nbFramesRedOnDamage]"
-    | otherwise = AliveP po pId lifes health score psb frameShootCpt frameRedCpt
+    | otherwise = 
+        let p = AliveP po pId lifes health score psb frameShootCpt frameRedCpt
+        in if not (insideScreenPlayer p) then error "player out of screen"
+        else p
 
 initInvinciblePlayer :: Object -> PlayerId -> Lifes -> Health -> Score -> PlayerShootBonus -> FrameCounter -> FrameCounter -> Player
 initInvinciblePlayer po pId lifes health score psb frameShootCpt frameCpt
@@ -130,14 +137,20 @@ initInvinciblePlayer po pId lifes health score psb frameShootCpt frameCpt
     | score < 0 = error "score must be positive"
     | frameShootCpt < 1 = error "frameShootCpt must be at least 1"
     | frameCpt < 1 || frameCpt > nbFramesInvincible = error "frameCpt must be inside [1, nbFramesInvincible]"
-    | otherwise = InvincibleP po pId lifes health score psb frameShootCpt frameCpt
+    | otherwise = 
+        let p = InvincibleP po pId lifes health score psb frameShootCpt frameCpt
+        in if not (insideScreenPlayer p) then error "player out of screen"
+        else p
 
 initDeadPlayer :: Object -> PlayerId -> Score ->  FrameCounter -> AnimationPhase -> Player
 initDeadPlayer po pId score frameCpt phase
     | score < 0 = error "score must be positive"
     | frameCpt < 1 || frameCpt > nbFramesPerExplosionPhase = error "frame counter must be inside of [1, 10]"
     | phase < 0 || phase > nbPlayerExplosionAssets = error "animation phase must be inside of [0, 6]" 
-    | otherwise = DeadP po pId score frameCpt phase
+    | otherwise = 
+        let p = DeadP po pId score frameCpt phase
+        in if not (insideScreenPlayer p) then error "player out of screen"
+        else p
 
 startInitAlivePlayer :: PlayerId -> Player
 startInitAlivePlayer pId =
@@ -153,6 +166,10 @@ startInitDeadPlayer pId =
         newPo = initPlayerObject xP yP (initDirection 0 0) (initObjectSpeed 0)
     in initDeadPlayer newPo pId 0 1 6
 
+-- ============================================================
+-- ================== PLAYER OPEARATIONS ======================
+-- ============================================================
+
 -- Converts an alive player with no healh and strictly more than one life remaining to an invincible player with a life less 
 -- (its health is reseted at 100)
 aliveToInvinciblePlayer :: Player -> Player
@@ -167,7 +184,7 @@ prop_pre_aliveToInvinciblePlayer _ = False
 prop_post_aliveToInvinciblePlayer :: Player -> Bool
 prop_post_aliveToInvinciblePlayer p = 
     let p' = aliveToInvinciblePlayer p
-    in case (p, p') of
+    in case (p, p') of -- ensures that all common attributes stay the same, except health reseted at 100, a life decreased, and frameCpt initialized at 1
         ((AliveP po pId lifes _ score psb frameShootCpt _), (InvincibleP po' pId' lifes' health' score' psb' frameShootCpt' frameCpt')) 
             -> lifes' == (lifes-1) && health' == 100 && po == po' && pId == pId' && score == score' && psb == psb' 
                 && frameShootCpt == frameShootCpt' && frameCpt' == 1
@@ -187,7 +204,7 @@ prop_pre_invincibleToAlivePlayer _ = False
 prop_post_invincibleToAlivePlayer :: Player -> Bool
 prop_post_invincibleToAlivePlayer p = 
     let p' = invincibleToAlivePlayer p
-    in case (p, p') of
+    in case (p, p') of -- ensures that all common attributes stay the same, with frameRedCpt initialized at 0
         ((InvincibleP po pId lifes health score psb frameShootCpt _), (AliveP po' pId' lifes' health' score' psb' frameShootCpt' frameRedCpt')) 
             -> po == po' && pId == pId' && lifes == lifes' && health == health' && score == score' && psb == psb'
                 && frameShootCpt == frameShootCpt' && frameRedCpt' == 0
@@ -216,9 +233,10 @@ playerHealth (DeadP _ _ _ _ _) = 0
 
 playerScore :: Player -> Score
 playerScore (AliveP _ _ _ _ s _ _ _) = s
-playerScore (InvincibleP _ _ _ h _ _ _ _) = h
+playerScore (InvincibleP _ _ _ _ s _ _ _) = s
 playerScore (DeadP _ _ s _ _) = s
 
+-- Updates the player object with the given one
 updatePlayerObject :: Player -> Object -> Player
 updatePlayerObject (AliveP _ pId lifes health score psb frameShootCpt frameRedCpt) newPo = initAlivePlayer newPo pId lifes health score psb frameShootCpt frameRedCpt
 updatePlayerObject (InvincibleP _ pId lifes health score psb frameShootCpt frameCpt) newPo = initInvinciblePlayer newPo pId lifes health score psb frameShootCpt frameCpt
@@ -227,29 +245,30 @@ updatePlayerObject (DeadP _ pId score frameCpt phase) newPo = initDeadPlayer new
 prop_post_updatePlayerObject :: Player -> Object -> Bool
 prop_post_updatePlayerObject p newPo =
     let newP = updatePlayerObject p newPo
-    in case (p, newP) of
+    in case (p, newP) of -- ensures that all attributes stay the same, except for the object, and that the new object has been set
         ((AliveP _ pId lifes health score psb frameShootCpt frameRedCpt), (AliveP obj' pId' lifes' health' score' psb' frameShootCpt' frameRedCpt')) ->
             obj' == newPo && pId' == pId && lifes' == lifes && health' == health && score' == score && psb' == psb 
             && frameShootCpt == frameShootCpt' && frameRedCpt' == frameRedCpt
-        ((InvincibleP _ pId lifes health score psb frameShootCpt frameCpt), (AliveP obj' pId' lifes' health' score' psb' frameShootCpt' frameCpt')) ->
+        ((InvincibleP _ pId lifes health score psb frameShootCpt frameCpt), (InvincibleP obj' pId' lifes' health' score' psb' frameShootCpt' frameCpt')) ->
             obj' == newPo && pId' == pId && lifes' == lifes && health' == health && score' == score && psb' == psb 
             && frameShootCpt == frameShootCpt' && frameCpt' == frameCpt
         ((DeadP _ pId score frameCpt phase), (DeadP obj' pId' score' frameCpt' phase')) ->
             obj' == newPo && pId' == pId && score' == score && frameCpt' == frameCpt && phase' == phase
         (_,_)-> False
 
+-- Adds the given score to the player.
 addScore :: Score -> Player -> Player
 addScore s (AliveP obj pId lifes health score psb frameShootCpt frameRedCpt) = initAlivePlayer obj pId lifes health (score+s) psb frameShootCpt frameRedCpt
 addScore s (InvincibleP obj pId lifes health score psb frameShootCpt frameCpt) = initInvinciblePlayer obj pId lifes health (score+s) psb frameShootCpt frameCpt
 addScore s (DeadP obj pId score frameCpt phase) = initDeadPlayer obj pId (score+s) frameCpt phase
 
 prop_pre_addScore :: Score -> Player -> Bool
-prop_pre_addScore s _ = s >= 0
+prop_pre_addScore s _ = s >= 0 -- score must be positive
 
 prop_post_addScore :: Score -> Player -> Bool
-prop_post_addScore s p =
+prop_post_addScore s p = 
     let p' = addScore s p
-    in case (p, p') of
+    in case (p, p') of -- ensures that all attributes stay the same, except for the score being correctly incremented
         (AliveP obj1 pId1 lifes1 health1 score1 psb1 frameShootCpt1 frameRedCpt1,
          AliveP obj2 pId2 lifes2 health2 score2 psb2 frameShootCpt2 frameRedCpt2) ->
                 obj1 == obj2 && pId1 == pId2 && lifes1 == lifes2 && health1 == health2 
@@ -346,28 +365,29 @@ movePlayer p@(InvincibleP po pId lifes health score psb frameShootCpt frameCpt) 
 movePlayer p@(DeadP _ _ _ _ _) _ = p
 
 prop_pre_movePlayer :: Player -> ScreenScrollingSpeed -> Bool
-prop_pre_movePlayer p _ = insideScreenPlayer p
+prop_pre_movePlayer _ ss = ss >= 0 --screen scrolling speed positive
 
 prop_post_movePlayer :: Player -> ScreenScrollingSpeed -> Bool
-prop_post_movePlayer p@(AliveP po pId lifes health score psb frameShootCpt frameRedCpt) ss = 
+prop_post_movePlayer p@(AliveP _ pId lifes health score psb frameShootCpt frameRedCpt) ss = 
     let newP = movePlayer p ss
-    in case newP of
-        newPP@(AliveP po' pId' lifes' health' score' psb' frameShootCpt' frameRedCpt') -> 
-            insideScreenPlayer newPP && po' == po && pId' == pId && lifes' == lifes && health' == health && score' == score && psb' == psb 
+    in case newP of -- ensures that all attributes stay the same, except for the object
+        (AliveP _ pId' lifes' health' score' psb' frameShootCpt' frameRedCpt') -> 
+            pId' == pId && lifes' == lifes && health' == health && score' == score && psb' == psb 
             && frameShootCpt' == frameShootCpt && frameRedCpt' == frameRedCpt
         _ -> False
-prop_post_movePlayer p@(InvincibleP po pId lifes health score psb frameShootCpt frameCpt) ss = -- same as alive
+prop_post_movePlayer p@(InvincibleP _ pId lifes health score psb frameShootCpt frameCpt) ss = -- same as alive
     let newP = movePlayer p ss
-    in case newP of
-        newPP@(InvincibleP po' pId' lifes' health' score' psb' frameShootCpt' frameCpt') -> 
-            insideScreenPlayer newPP && po' == po && pId' == pId && lifes' == lifes && health' == health && score' == score && psb' == psb 
+    in case newP of -- ensures that all attributes stay the same, except for the object
+        (InvincibleP _ pId' lifes' health' score' psb' frameShootCpt' frameCpt') -> 
+            pId' == pId && lifes' == lifes && health' == health && score' == score && psb' == psb 
             && frameShootCpt' == frameShootCpt && frameCpt' == frameCpt
         _ -> False
 prop_post_movePlayer p@(DeadP _ _ _ _ _) ss = 
     let newP = movePlayer p ss
-    in p == newP
+    in p == newP -- no movement so same player
 
 -- Indicates if a player is inside the screen (by considering the bottom bar as the bottom limit of the screen)
+-- ALWAYS at true because part of the Player invariant, no need to test it.
 insideScreenPlayer :: Player -> Bool
 insideScreenPlayer p = 
     let leftBound = leftXScreenBound + (widthPlayer / 2)
@@ -494,16 +514,16 @@ prop_post_runPlayerAnimation p =
         (AliveP obj1 id1 l1 h1 s1 d1 fSCpt1 red1,
          AliveP obj2 id2 l2 h2 s2 d2 fSCpt2 red2) ->
             obj1 == obj2 && id1 == id2 && l1 == l2 && h1 == h2 && s1 == s2 && d1 == d2 && fSCpt1 == fSCpt2
-            && (
-                (red1 == nbFramesRedOnDamage && red2 == 0)
-                || (red1 > 0 && red2 == (red1 + 1))
-                || (red1 == 0 && red2 == 0)
-                )
+            && let expectedRed =
+                    if red1 == nbFramesRedOnDamage then 0
+                    else if red1 > 0 then red1 + 1
+                    else 0
+                    in red2 == expectedRed
         -- Invincible : verify the correct evolution of the frame counter, if no switch back to alive.
         (InvincibleP obj1 id1 l1 h1 s1 d1 fSCpt1 frameCpt1,
          InvincibleP obj2 id2 l2 h2 s2 d2 fSCpt2 frameCpt2) ->
             obj1 == obj2 && id1 == id2 && l1 == l2 && h1 == h2 && s1 == s2 && d1 == d2 && fSCpt1 == fSCpt2
-            && frameCpt1 == (frameCpt2+1)
+            && frameCpt2 == (frameCpt1+1)
         -- Invincible : verify the correct switch back to alive, if the counter has reached the limit.
         (InvincibleP obj1 id1 l1 h1 s1 d1 fSCpt1 frameCpt1,
          AliveP obj2 id2 l2 h2 s2 d2 fSCpt2 red2) ->
@@ -512,12 +532,12 @@ prop_post_runPlayerAnimation p =
         -- Dead : verify the correct evolution of the animation
         (DeadP obj1 id1 s1 frameCpt1 phase1,
          DeadP obj2 id2 s2 frameCpt2 phase2) ->
-            obj1 == obj2 && id1 == id2 && s2 == s1
-            && (
-                (phase1 == nbPlayerExplosionAssets && frameCpt2 == frameCpt1 && phase2 == phase1)
-                || (frameCpt1 < nbFramesPerExplosionPhase && frameCpt2 == frameCpt1 + 1 && phase2 == phase1)
-                || (frameCpt1 == nbFramesPerExplosionPhase && frameCpt2 == 1 && phase2 == phase1 + 1)
-               )
+            obj1 == obj2 && id1 == id2 && s1 == s2
+            && let (expectedFrame, expectedPhase) =
+                    if phase1 == nbPlayerExplosionAssets then (frameCpt1, phase1)
+                    else if frameCpt1 < nbFramesPerExplosionPhase then (frameCpt1 + 1, phase1)
+                    else (1, phase1 + 1)
+                in frameCpt2 == expectedFrame && phase2 == expectedPhase
         _ -> False
 
 -- Updates player shoot bonus
@@ -526,11 +546,42 @@ updatePlayerShootBonus (AliveP po pId lifes health score _ frameShootCpt frameRe
 updatePlayerShootBonus (InvincibleP po pId lifes health score _ frameShootCpt frameCpt) newPsb = initInvinciblePlayer po pId lifes health score newPsb frameShootCpt frameCpt
 updatePlayerShootBonus p@(DeadP _ _ _ _ _) _ = p
 
+prop_post_updatePlayerShootBonus :: Player -> PlayerShootBonus -> Bool
+prop_post_updatePlayerShootBonus p newPsb =
+    let newP = updatePlayerShootBonus p newPsb
+    in case (p, newP) of -- ensures that all attributes stay the same, except for the PlayerShootBonus, and that the new PlayerShootBonus has been set
+        ((AliveP obj pId lifes health score _ frameShootCpt frameRedCpt), (AliveP obj' pId' lifes' health' score' psb' frameShootCpt' frameRedCpt')) ->
+            psb' == newPsb  && obj' == obj && pId' == pId && lifes' == lifes && health' == health && score' == score
+            && frameShootCpt == frameShootCpt' && frameRedCpt' == frameRedCpt
+        ((InvincibleP obj pId lifes health score _ frameShootCpt frameCpt), (InvincibleP obj' pId' lifes' health' score' psb' frameShootCpt' frameCpt')) ->
+            psb' == newPsb && obj' == obj && pId' == pId && lifes' == lifes && health' == health && score' == score
+            && frameShootCpt == frameShootCpt' && frameCpt' == frameCpt
+        (dead@(DeadP _ _ _ _ _), dead'@(DeadP _ _ _ _ _)) -> dead == dead' -- no PlayerShootBonus change on a dead player
+        (_,_)-> False
+
 -- Increments the shoot frame counter since the last effective shot
 incrementShootFrameCounter :: Player -> Player
 incrementShootFrameCounter (AliveP po pId lifes health score psb frameShootCpt frameRedCpt) = initAlivePlayer po pId lifes health score psb (frameShootCpt+1) frameRedCpt
 incrementShootFrameCounter (InvincibleP po pId lifes health score psb frameShootCpt frameCpt) = initInvinciblePlayer po pId lifes health score psb (frameShootCpt+1) frameCpt
 incrementShootFrameCounter p@(DeadP _ _ _ _ _) = p
+
+prop_post_incrementShootFrameCounter :: Player -> Bool
+prop_post_incrementShootFrameCounter p = 
+    let p' = incrementShootFrameCounter p
+    in case (p, p') of -- ensures that all attributes stay the same, except for the frame counter being correctly incremented
+        (AliveP obj1 pId1 lifes1 health1 score1 psb1 frameShootCpt1 frameRedCpt1,
+         AliveP obj2 pId2 lifes2 health2 score2 psb2 frameShootCpt2 frameRedCpt2) ->
+                obj1 == obj2 && pId1 == pId2 && lifes1 == lifes2 && health1 == health2 
+                && score2 == score1 && psb1 == psb2 && (frameShootCpt1+1) == frameShootCpt2
+                && frameRedCpt1 == frameRedCpt2
+        (InvincibleP obj1 pId1 lifes1 health1 score1 psb1 frameShootCpt1 frameCpt1,
+         InvincibleP obj2 pId2 lifes2 health2 score2 psb2 frameShootCpt2 frameCpt2) ->
+                obj1 == obj2 && pId1 == pId2 && lifes1 == lifes2 && health1 == health2 
+                && score2 == score1 && psb1 == psb2 && (frameShootCpt1+1) == frameShootCpt2
+                && frameCpt1 == frameCpt2
+        (dead@(DeadP _ _ _ _ _),
+         dead'@(DeadP _ _ _ _ _)) -> dead == dead' -- no increment when player dead, stays the same
+        _ -> False
 
 -- ============================================================
 -- =================== PLAYER INVARIANT =======================
@@ -549,20 +600,20 @@ instance Renderable Player where
     getTranslatedAssets ga player = 
         if not (isPlayerDead player) then
             getTranslatedBoosterAssets ga player ++
-            getTranslatedPlayerAssets ga player
-        else getTranslatedPlayerAssets ga player -- translate only the potential animation if dead
+            getTranslatedPlayerAsset ga player
+        else getTranslatedPlayerAsset ga player -- translate only the potential animation if dead
 
 -- Returns a list of translated player assets (at most one).
-getTranslatedPlayerAssets :: GameAssets -> Player -> [Picture]
-getTranslatedPlayerAssets ga (AliveP po pId _ _ _ _ _ frameRedCpt) = 
+getTranslatedPlayerAsset :: GameAssets -> Player -> [Picture]
+getTranslatedPlayerAsset ga (AliveP po pId _ _ _ _ _ frameRedCpt) = 
     let (px, py) = centerHitbox (objectHitbox po)
         pic = if frameRedCpt > 0 then (pDamagedPic ga) else (if pId == 1 then (p1Pic ga) else (p2Pic ga))
     in [Translate px py pic]
-getTranslatedPlayerAssets ga (InvincibleP po pId _ _ _ _ _ frameCpt) = 
+getTranslatedPlayerAsset ga (InvincibleP po pId _ _ _ _ _ frameCpt) = 
     let (px, py) = centerHitbox (objectHitbox po)
         pic = if (frameCpt `mod` invincibleIntervalBlink) == 0 then pInvinciblePic ga else (if pId == 1 then (p1Pic ga) else (p2Pic ga))
     in [Translate px py pic]
-getTranslatedPlayerAssets ga (DeadP po pId _ _ phase) =
+getTranslatedPlayerAsset ga (DeadP po pId _ _ phase) =
     let (px, py) = centerHitbox (objectHitbox po)
     in 
         if phase >= 0 && phase < nbPlayerExplosionAssets 
@@ -571,6 +622,8 @@ getTranslatedPlayerAssets ga (DeadP po pId _ _ phase) =
                 else [Translate px py (Seq.index (p2ExplosionPics ga) phase)]
         else [] -- when the animation has been done, no more rendering (phase == nbPlayerExplosionAssets)
 
+prop_post_getTranslatedPlayerAsset :: GameAssets -> Player -> Bool
+prop_post_getTranslatedPlayerAsset ga player = length (getTranslatedPlayerAsset ga player) <= 1 -- at most one rendered player asset
 
 -- Returns a list of translated booster assets for boosters only enabled when moving with the right player direction.
 getTranslatedBoosterAssets :: GameAssets -> Player -> [Picture]
@@ -606,7 +659,7 @@ getTranslatedBoosterAssets ga player =
 prop_post_getTranslatedBoosterAssets :: GameAssets -> Player -> Bool
 prop_post_getTranslatedBoosterAssets ga player = 
     let boosterPics = getTranslatedBoosterAssets ga player
-    in (length boosterPics) == 0 || (length boosterPics) == 2 || (length boosterPics) == 3
+    in (length boosterPics) >= 0 && (length boosterPics) <= 3 -- at most 3 booster assets are rendered (movement in diagonal)
 
 -- ============================================================
 -- ===================== PLAYER MOVABLE =======================
@@ -645,19 +698,19 @@ instance Collidable Player where
 -- ============================================================
 
 instance Damageable Player where
-    currentHealth :: Player -> Maybe Health
-    currentHealth (AliveP _ _ _ h _ _ _ _) = Just h
-    currentHealth (InvincibleP _ _ _ h _ _ _ _) = Just h
-    currentHealth (DeadP _ _ _ _ _) = Nothing
+    isDead :: Player -> Bool
+    isDead = isPlayerDead
 
-    takeDamage :: Damage -> Player -> Maybe Player
+    takeDamage :: Damage -> Player -> Player
     takeDamage d p@(AliveP obj pId lifes health score psb frameShootCpt _) =
-        let newHealth = health-d
-        in
-            if newHealth > 0 then Just (initAlivePlayer obj pId lifes newHealth score psb frameShootCpt 1) -- 1 : start of red spaceship
-            else 
-                let newLifes = lifes-1
-                in 
-                    if newLifes > 0 then Just (aliveToInvinciblePlayer p) -- health restored at 100 | player becomes temporary invincible
-                    else Just (initDeadPlayer obj pId score 1 0) -- dead
-    takeDamage _ p = Just p -- Invincible and Dead players don't take damages
+        if d <= 0 then p -- no damages : the player stays the same
+        else
+            let newHealth = health-d
+            in
+                if newHealth > 0 then (initAlivePlayer obj pId lifes newHealth score psb frameShootCpt 1) -- 1 : start of red spaceship
+                else 
+                    let newLifes = lifes-1
+                    in 
+                        if newLifes > 0 then (aliveToInvinciblePlayer p) -- health restored at 100 | player becomes temporary invincible
+                        else (initDeadPlayer obj pId score 1 0) -- dead
+    takeDamage _ p = p -- Invincible and Dead players don't take damages

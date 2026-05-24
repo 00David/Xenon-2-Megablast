@@ -10,8 +10,10 @@ class Movable a where
     -- Indicates if a is inside the screen
     insideScreen :: a -> Bool
 
-law_move_commutative  :: (Movable a, Eq a) => a -> ScreenScrollingSpeed -> ScreenScrollingSpeed -> Bool
-law_move_commutative  a s1 s2 = move (move a s1) s2 == move (move a s2) s1
+-- Commutativity cannot be kept as a law for move beacuse the Object instance implies having the ability to move
+-- independantly of the given screen scrolling speed.
 
+-- Law not tested because it is not really relevant to test it for each instance. 
+-- However, it is tested as a precondition before each move.
 law_positive_screenSpeed :: a -> ScreenScrollingSpeed -> Bool
 law_positive_screenSpeed _ s = s >= 0

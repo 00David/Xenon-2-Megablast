@@ -1,67 +1,204 @@
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module PlayerSpec (
     TestPlayer(..),
     spec
 )
 where
 
-import Graphics.Gloss ( Picture(Blank) )
-
 import Test.Hspec
 import Test.QuickCheck
 
+import GameSetup
+import GameState.Bonus
 import GameState.Player
+import GameState.Projectile
+import Graphics.Assets
+import Objects.Hitbox
 import Objects.Objects
-import ObjectsSpec(TestObject(..))
+import Typeclasses.Damageable
+import Typeclasses.Invariant
+import Typeclasses.Movable
+import AssetsSpec(TestGameAssets(..))
+import ObjectsSpec(TestObject(..), TestDirection(..), TestObjectSpeed(..))
 
 spec :: Spec
 spec = do
     initAlivePlayerSpec
+    initInvinciblePlayerSpec
     initDeadPlayerSpec
+    startInitAlivePlayerSpec
+    startInitDeadPlayerSpec
+    aliveToInvinciblePlayerSpec
+    invincibleToAlivePlayerSpec
     playerObjectSpec
     playerIdSpec
     playerLifesSpec
     playerHealthSpec
     playerScoreSpec
-    playerExplAnimationSpec
+    updatePlayerObjectSpec
+    addScoreSpec
     isPlayerDeadSpec
+    movePlayerSpec
+    movePlayerQuickCheckSpec
+    playerShotSpec
+    runPlayerAnimationSpec
+    updatePlayerShootBonusSpec
+    incrementShootFrameCounterSpec
+    getTranslatedPlayerAssetQuickCheckSpec
+    getTranslatedBoosterAssetsQuickCheckSpec
+    invariantLawsSpec
+    renderableLawSpec
+    collidableLawsSpec
+    damageableLawsSpec
+
+-- ============================================================
+-- =================== TEST PLAYER ============================
+-- ============================================================
 
 newtype TestPlayer = TestPlayer { getPlayer :: Player } deriving (Eq, Show)
+
+genAlivePlayer :: Gen TestPlayer
+genAlivePlayer = do
+    pId <- choose (1, 2)
+    lifes <- choose (1, 3)
+    health <- choose (1, 100)
+    score <- abs <$> arbitrary
+    frameShootCpt <- choose (1, 100)
+    frameRedCpt <- choose (0, nbFramesRedOnDamage)
+
+    -- Ensure player is inside screen bounds
+    x <- choose ((leftXScreenBound + widthPlayer/2), (rightXScreenBound - widthPlayer/2))
+    y <- choose ((bottomYScreenWithBarBound + heightPlayer/2), (topYScreenBound - heightPlayer/2))
+
+    (TestDirection dir) <-arbitrary
+    (TestObjectSpeed speed) <-arbitrary
+    let 
+        playerObj = initPlayerObject x y dir speed
+        psb = NoBonus -- TMP
+    
+    return $ TestPlayer (initAlivePlayer playerObj pId lifes health score psb frameShootCpt frameRedCpt)
+
+genInvinciblePlayer :: Gen TestPlayer
+genInvinciblePlayer = do
+    pId <- choose (1, 2)
+    lifes <- choose (1, 3)
+    health <- choose (1, 100)
+    score <- abs <$> arbitrary
+    frameShootCpt <- choose (1, 100)
+    frameCpt <- choose (1, nbFramesInvincible)
+
+    -- Ensure player is inside screen bounds
+    x <- choose ((leftXScreenBound + widthPlayer/2), (rightXScreenBound - widthPlayer/2))
+    y <- choose ((bottomYScreenWithBarBound + heightPlayer/2), (topYScreenBound - heightPlayer/2))
+
+    (TestDirection dir) <-arbitrary
+    (TestObjectSpeed speed) <-arbitrary
+    let 
+        playerObj = initPlayerObject x y dir speed
+        psb = NoBonus -- TMP
+    
+    return $ TestPlayer (initInvinciblePlayer playerObj pId lifes health score psb frameShootCpt frameCpt)
+
+genDeadPlayer :: Gen TestPlayer
+genDeadPlayer = do
+    pId <- elements [1, 2]
+    score <- abs <$> arbitrary
+    frameCpt <- choose (1, nbFramesPerExplosionPhase)
+    phase <- choose (0, nbPlayerExplosionAssets)
+
+    -- Ensure player is inside screen bounds
+    x <- choose ((leftXScreenBound + widthPlayer/2), (rightXScreenBound - widthPlayer/2))
+    y <- choose ((bottomYScreenWithBarBound + heightPlayer/2), (topYScreenBound - heightPlayer/2))
+    
+    (TestDirection dir) <-arbitrary
+    (TestObjectSpeed speed) <-arbitrary
+    let 
+        playerObj = initPlayerObject x y dir speed
+    
+    return $ TestPlayer (initDeadPlayer playerObj pId score frameCpt phase)
+
 instance Arbitrary TestPlayer where
+    arbitrary :: Gen TestPlayer
     arbitrary = oneof [
-        do --Alive player
-        obj <- getObject <$> arbitrary
-        pId <- elements [1, 2]
-        lifes <- elements [1, 2, 3]
-        health <- choose (1, 100)
-        score <- abs <$> arbitrary
-        return $ TestPlayer (AliveP obj pId lifes health score)
-        , do -- Dead player
-        obj <- getObject <$> arbitrary
-        pId <- elements [1, 2]
-        score <- abs <$> arbitrary
-        anim <- choose (1, 7)
-        return $ TestPlayer (DeadP obj pId score anim)
+        genAlivePlayer,
+        genInvinciblePlayer,
+        genDeadPlayer
         ]
 
-prop_initAlivePlayer_preservesInvariant :: Property
-prop_initAlivePlayer_preservesInvariant =
-  forAll (arbitrary :: Gen TestObject) $ \obj ->
-  forAll (elements [1,2]) $ \pId ->
-  forAll (elements [1,2,3]) $ \l ->
-  forAll (choose (1,100)) $ \h ->
-  forAll (abs <$> arbitrary) $ \s ->
-    prop_inv_object (getObject obj)
-    ==> prop_inv_player (initAlivePlayer (getObject obj) pId l h s)
+genAliveToInvinciblePlayer :: Gen TestPlayer
+genAliveToInvinciblePlayer = do
+    pId <- choose (1,2)
+    lifes <- choose (2,3) -- more than 1
+    let health = 0 -- exactly 0
+    score <- abs <$> arbitrary
+    frameShootCpt <- choose (1,100)
+    frameRedCpt <- choose (0, nbFramesRedOnDamage)
 
-prop_initDeadPlayer_preservesInvariant :: Property
-prop_initDeadPlayer_preservesInvariant =
-  forAll (arbitrary :: Gen TestObject) $ \obj ->
-  forAll (elements [1,2]) $ \pId ->
-  forAll (abs <$> arbitrary) $ \s ->
-  forAll (choose (1,7)) $ \anim ->
-    prop_inv_object (getObject obj)
-    ==> prop_inv_player (initDeadPlayer (getObject obj) pId s anim)
+    x <- choose (leftXScreenBound + widthPlayer/2, rightXScreenBound - widthPlayer/2)
+    y <- choose (bottomYScreenWithBarBound + heightPlayer/2, topYScreenBound - heightPlayer/2)
+    (TestDirection dir) <- arbitrary
+    (TestObjectSpeed speed) <- arbitrary
+
+    let playerObj = initPlayerObject x y dir speed
+
+    return $ TestPlayer (AliveP playerObj pId lifes health score NoBonus frameShootCpt frameRedCpt)
+
+-- ============================================================
+-- ================= PLAYER CONSTRUCTORS ======================
+-- ============================================================
+
+prop_initAlivePlayer_preservesInvariant :: TestObject -> Property
+prop_initAlivePlayer_preservesInvariant (TestObject obj) =
+    forAll (choose (1,2)) $ \pId ->
+    forAll (choose (1,3)) $ \lifes ->
+    forAll (choose (1,100)) $ \health ->
+    forAll (abs <$> arbitrary) $ \score ->
+    --forAll arbitrary $ \psb ->
+    forAll (choose (1, 100)) $ \frameShootCpt ->
+    forAll (choose (0, nbFramesRedOnDamage)) $ \frameRedCpt ->
+        let
+            psb = NoBonus
+            pTMP = AliveP obj pId lifes health score psb frameShootCpt frameRedCpt
+        in insideScreenPlayer pTMP ==>
+            prop_inv_player (initAlivePlayer obj pId lifes health score psb frameShootCpt frameRedCpt)
+
+prop_initInvinciblePlayer_preservesInvariant :: TestObject -> Property
+prop_initInvinciblePlayer_preservesInvariant (TestObject obj) =
+    forAll (choose (1,2)) $ \pId ->
+    forAll (choose (1,3)) $ \lifes ->
+    forAll (choose (1,100)) $ \health ->
+    forAll (abs <$> arbitrary) $ \score ->
+    --forAll arbitrary $ \psb ->
+    forAll (choose (1, 100)) $ \frameShootCpt ->
+    forAll (choose (1, nbFramesInvincible)) $ \frameCpt ->
+        let
+            psb = NoBonus
+            pTMP = InvincibleP obj pId lifes health score psb frameShootCpt frameCpt
+        in insideScreenPlayer pTMP ==>
+            prop_inv_player (initInvinciblePlayer obj pId lifes health score psb frameShootCpt frameCpt)
+
+prop_initDeadPlayer_preservesInvariant :: TestObject -> Property
+prop_initDeadPlayer_preservesInvariant (TestObject obj) =
+    forAll (choose (1,2)) $ \pId ->
+    forAll (abs <$> arbitrary) $ \score ->
+    forAll (choose (1, nbFramesPerExplosionPhase)) $ \frameCpt ->
+    forAll (choose (0, nbPlayerExplosionAssets)) $ \phase ->
+        let
+            pTMP = DeadP obj pId score frameCpt phase
+        in insideScreenPlayer pTMP ==>
+            prop_inv_player (initDeadPlayer obj pId score frameCpt phase)
+
+prop_startInitAlivePlayer_preservesInvariant :: Property
+prop_startInitAlivePlayer_preservesInvariant =
+    forAll (choose (1,2)) $ \pId ->
+        prop_inv_player (startInitAlivePlayer pId)
+
+prop_startInitDeadPlayer_preservesInvariant :: Property
+prop_startInitDeadPlayer_preservesInvariant =
+    forAll (choose (1,2)) $ \pId ->
+        prop_inv_player (startInitDeadPlayer pId)
 
 initAlivePlayerSpec :: SpecWith ()
 initAlivePlayerSpec = do
@@ -69,102 +206,357 @@ initAlivePlayerSpec = do
         it "preserves the Player invariant for valid alive Players" $
             property prop_initAlivePlayer_preservesInvariant
 
+initInvinciblePlayerSpec :: SpecWith ()
+initInvinciblePlayerSpec = do
+    describe "initInvinciblePlayer (QuickCheck)" $ do
+        it "preserves the Player invariant for valid invincible Players" $
+            property prop_initInvinciblePlayer_preservesInvariant
+
 initDeadPlayerSpec :: SpecWith ()
 initDeadPlayerSpec = do
     describe "initDeadPlayer (QuickCheck)" $ do
         it "preserves the Player invariant for valid dead Players" $
             property prop_initDeadPlayer_preservesInvariant
 
+startInitAlivePlayerSpec :: SpecWith ()
+startInitAlivePlayerSpec = do
+    describe "startInitAlivePlayer (QuickCheck)" $ do
+        it "preserves the Player invariant for start alive Players" $
+            property prop_startInitAlivePlayer_preservesInvariant
+
+startInitDeadPlayerSpec :: SpecWith ()
+startInitDeadPlayerSpec = do
+    describe "startInitDeadPlayer (QuickCheck)" $ do
+        it "preserves the Player invariant for start dead Players" $
+            property prop_startInitDeadPlayer_preservesInvariant
+
+-- ============================================================
+-- ================== PLAYER OPERATIONS =======================
+-- ============================================================
+
+aliveToInvinciblePlayerSpec :: Spec
+aliveToInvinciblePlayerSpec = do
+    describe "aliveToInvinciblePlayer (QuickCheck)" $ do
+        it "satisfies aliveToInvinciblePlayer post-condition for all valid parameters" $
+            forAll genAliveToInvinciblePlayer (
+                \(TestPlayer p) ->
+                    let p' = aliveToInvinciblePlayer p
+                    in prop_inv_player p'
+                    && prop_post_aliveToInvinciblePlayer p
+            )
+
+invincibleToAlivePlayerSpec :: Spec
+invincibleToAlivePlayerSpec = do
+    describe "invincibleToAlivePlayer (QuickCheck)" $ do
+        it "satisfies invincibleToAlivePlayer post-condition for all valid parameters" $
+            property (\(TestPlayer p) ->
+                (prop_inv_player p && prop_pre_invincibleToAlivePlayer p)
+                ==> let p' = invincibleToAlivePlayer p
+                    in prop_inv_player p' && prop_post_invincibleToAlivePlayer p
+            )
+
 playerObjectSpec :: Spec
 playerObjectSpec = do
     describe "playerObject (unit tests)" $ do
         it "returns correct Object for alive Player" $ do
-            let po = initPlayerObject Blank 10 20 (initDirection 1 0) (ObjectSpeed 3)
-                p  = initAlivePlayer po 3 100 10
+            let po = initPlayerObject 10 20 (initDirection 1 0) (initObjectSpeed 3)
+                p  = initAlivePlayer po 1 3 100 0 NoBonus 1 0
+            playerObject p `shouldBe` po
+
+        it "returns correct Object for invincible Player" $ do
+            let po = initPlayerObject 10 20 (initDirection 0 1) (initObjectSpeed 2)
+                p  = initInvinciblePlayer po 2 2 80 50 NoBonus 1 10
             playerObject p `shouldBe` po
 
         it "returns correct Object for dead Player" $ do
-            let po = initPlayerObject Blank 5 5 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initDeadPlayer po 10 3
+            let po = initPlayerObject 5 5 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initDeadPlayer po 1 100 1 0
             playerObject p `shouldBe` po
 
 playerIdSpec :: Spec
 playerIdSpec = do
     describe "playerId (unit tests)" $ do
         it "returns id 1 for alive Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initAlivePlayer po 1 2 100 0
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initAlivePlayer po 1 2 100 0 NoBonus 1 0
             playerId p `shouldBe` 1
 
+        it "returns id 2 for invincible Player" $ do
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initInvinciblePlayer po 2 3 100 0 NoBonus 1 1
+            playerId p `shouldBe` 2
+
         it "returns id 2 for dead Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initDeadPlayer po 2 10 5
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initDeadPlayer po 2 10 1 0
             playerId p `shouldBe` 2
 
 playerLifesSpec :: Spec
 playerLifesSpec = do
     describe "playerLifes (unit tests)" $ do
         it "returns lifes for alive Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initAlivePlayer po 1 2 100 0
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initAlivePlayer po 1 2 100 0 NoBonus 1 0
             playerLifes p `shouldBe` 2
 
+        it "returns lifes for invincible Player" $ do
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initInvinciblePlayer po 1 3 100 0 NoBonus 1 1
+            playerLifes p `shouldBe` 3
+
         it "returns 0 for dead Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initDeadPlayer po 1 10 5
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initDeadPlayer po 1 10 1 0
             playerLifes p `shouldBe` 0
 
 playerHealthSpec :: Spec
 playerHealthSpec = do
     describe "playerHealth (unit tests)" $ do
-
         it "returns health for alive Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initAlivePlayer po 1 3 75 0
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initAlivePlayer po 1 3 75 0 NoBonus 1 0
             playerHealth p `shouldBe` 75
 
+        it "returns health for invincible Player" $ do
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initInvinciblePlayer po 1 2 50 0 NoBonus 1 1
+            playerHealth p `shouldBe` 50
+
         it "returns 0 for dead Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initDeadPlayer po 2 0 2
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initDeadPlayer po 2 0 1 0
             playerHealth p `shouldBe` 0
 
 playerScoreSpec :: Spec
 playerScoreSpec = do
     describe "playerScore (unit tests)" $ do
-
         it "returns score for alive Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initAlivePlayer po 1 3 100 42
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initAlivePlayer po 1 3 100 42 NoBonus 1 0
             playerScore p `shouldBe` 42
 
+        it "returns score for invincible Player" $ do
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initInvinciblePlayer po 2 2 100 123 NoBonus 1 1
+            playerScore p `shouldBe` 123
+
         it "returns score for dead Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initDeadPlayer po 2 99 5
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initDeadPlayer po 2 99 1 0
             playerScore p `shouldBe` 99
 
-playerExplAnimationSpec :: Spec
-playerExplAnimationSpec = do
-    describe "playerExplAnimation (unit tests)" $ do
+updatePlayerObjectSpec :: Spec
+updatePlayerObjectSpec = do
+    describe "updatePlayerObject (QuickCheck)" $ do
+        it "satisfies updatePlayerObject post-condition for all valid parameters" $
+            property (\(TestPlayer p) (TestObject newObj) ->
+                prop_inv_player p && prop_inv_object newObj
+                ==> let p' = updatePlayerObject p newObj
+                    in prop_inv_object (playerObject p') && prop_post_updatePlayerObject p newObj
+            )
 
-        it "returns 0 for alive Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initAlivePlayer po 1 3 100 10
-            playerExplAnimation p `shouldBe` 0
-
-        it "returns animation for dead Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initDeadPlayer po 2 10 6
-            playerExplAnimation p `shouldBe` 6
+addScoreSpec :: Spec
+addScoreSpec = do
+    describe "addScore (QuickCheck)" $ do
+        it "satisfies addScore post-condition for all valid parameters" $
+            property (\(TestPlayer p) s  ->
+                    prop_inv_player p && prop_pre_addScore s p
+                    ==> let p' = addScore s p
+                        in prop_inv_player p' && prop_post_addScore s p
+            )
 
 isPlayerDeadSpec :: Spec
 isPlayerDeadSpec = do
     describe "isPlayerDead (unit tests)" $ do
         it "returns False for alive Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initAlivePlayer po 1 3 100 10
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initAlivePlayer po 1 3 100 10 NoBonus 1 0
+            isPlayerDead p `shouldBe` False
+
+        it "returns False for invincible Player" $ do
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initInvinciblePlayer po 1 3 100 10 NoBonus 1 1
             isPlayerDead p `shouldBe` False
 
         it "returns True for dead Player" $ do
-            let po = initPlayerObject Blank 0 0 (initDirection 0 0) (ObjectSpeed 0)
-                p  = initDeadPlayer po 2 10 3
+            let po = initPlayerObject 0 0 (initDirection 0 0) (initObjectSpeed 0)
+                p  = initDeadPlayer po 2 10 1 0
             isPlayerDead p `shouldBe` True
+
+movePlayerSpec :: Spec
+movePlayerSpec = do
+    describe "movePlayer (unit tests)" $ do
+        it "moves alive player according to direction and speed" $ do
+            let po = initPlayerObject 0 0 (initDirection 1 0) (initObjectSpeed 5)
+                p = initAlivePlayer po 1 3 100 0 NoBonus 1 0
+                p' = movePlayer p 0
+                po' = playerObject p'
+            centerHitbox (objectHitbox po') `shouldBe` (5, 0)
+
+        it "does not move dead player" $ do
+            let po = initPlayerObject 0 0 (initDirection 1 0) (initObjectSpeed 5)
+                p = initDeadPlayer po 1 100 1 0
+                p' = movePlayer p 0
+            p' `shouldBe` p
+
+movePlayerQuickCheckSpec :: Spec
+movePlayerQuickCheckSpec = do
+    describe "movePlayer (QuickCheck)" $ do
+        it "satisfies movePlayer post-condition for all valid parameters" $
+            property (\(TestPlayer p) ss ->
+                (prop_inv_player p && prop_pre_movePlayer p ss)
+                ==> let p' = movePlayer p ss
+                    in prop_inv_player p' && prop_post_movePlayer p ss
+            )
+
+playerShotSpec :: Spec
+playerShotSpec = do
+    describe "playerShot (QuickCheck)" $ do
+        it "satisfies playerShot post-condition for all valid parameters" $
+            property (\(TestPlayer p) ->
+                prop_inv_player p
+                ==> let (maybeProj, p') = playerShot p
+                    in prop_inv_player p' && prop_post_playerShot p
+                        && case maybeProj of
+                            Nothing -> True
+                            (Just proj) -> prop_inv_projectile proj
+            )
+
+runPlayerAnimationSpec :: Spec
+runPlayerAnimationSpec = do
+    describe "runPlayerAnimation (QuickCheck)" $ do
+        it "satisfies runPlayerAnimation post-condition for all valid parameters" $
+            property (\(TestPlayer p) ->
+                prop_inv_player p
+                ==> let p' = runPlayerAnimation p
+                    in prop_inv_player p' && prop_post_runPlayerAnimation p
+            )
+
+updatePlayerShootBonusSpec :: Spec
+updatePlayerShootBonusSpec = do
+    describe "updatePlayerShootBonus (QuickCheck)" $ do
+        it "satisfies updatePlayerShootBonus post-condition for all valid parameters" $
+            property (\(TestPlayer p) ->
+                let newPsb = NoBonus in -- TMP
+                prop_inv_player p && prop_inv_playerShootBonus newPsb
+                ==> let p' = updatePlayerShootBonus p newPsb
+                    in prop_inv_player p' && prop_post_updatePlayerShootBonus p newPsb
+            )
+
+incrementShootFrameCounterSpec :: Spec
+incrementShootFrameCounterSpec = do
+    describe "incrementShootFrameCounter (QuickCheck)" $ do
+        it "satisfies incrementShootFrameCounter post-condition for all valid parameters" $
+            property (\(TestPlayer p) ->
+                prop_inv_player p
+                ==> let p' = incrementShootFrameCounter p
+                    in prop_inv_player p' && prop_post_incrementShootFrameCounter p
+            )
+
+getTranslatedPlayerAssetQuickCheckSpec :: Spec
+getTranslatedPlayerAssetQuickCheckSpec = do
+    describe "getTranslatedPlayerAsset (QuickCheck)" $ do
+        it "satisfies getTranslatedPlayerAsset post-condition for all valid parameters" $
+            property (\(TestGameAssets ga) (TestPlayer player) ->
+                prop_inv_player player ==> prop_post_getTranslatedPlayerAsset ga player
+            )
+
+getTranslatedBoosterAssetsQuickCheckSpec :: Spec
+getTranslatedBoosterAssetsQuickCheckSpec = do
+    describe "getTranslatedBoosterAssets (QuickCheck)" $ do
+        it "satisfies getTranslatedBoosterAssets post-condition for all valid players" $
+            property (\(TestGameAssets ga) (TestPlayer player) ->
+                prop_inv_player player
+                ==> prop_post_getTranslatedBoosterAssets ga player
+            )
+
+-- ============================================================
+-- ======================== LAWS ==============================
+-- ============================================================
+
+invariantLawsSpec :: Spec
+invariantLawsSpec = do
+    describe "Invariant laws (QuickCheck)" $ do
+        it "law_invariant_stable for Player" $
+            property (
+                \(TestPlayer player) ->
+                    law_invariant_stable player
+            )
+
+        it "law_invariant_idempotent for Player" $
+            property (
+                \(TestPlayer player) ->
+                    law_invariant_idempotent player
+            )
+
+renderableLawSpec :: Spec
+renderableLawSpec = do
+    describe "Renderable laws (QuickCheck)" $ do
+        it "law_renderable_finite for Player" $
+            property (\(TestGameAssets ga) (TestPlayer player) ->
+                law_renderable_finite ga player
+            )
+
+collidableLawsSpec :: Spec
+collidableLawsSpec = do
+    describe "Collidable laws (QuickCheck)" $ do
+        it "law_collidable_reflexive for Player" $
+            property ( \(TestPlayer p) ->
+                prop_inv_player p ==>
+                law_collidable_reflexive p
+            )
+
+        it "law_collidable_symmetric for Player with another Player" $
+            property ( \(TestPlayer p1) (TestPlayer p2) ->
+                prop_inv_player p1 && prop_inv_player p2 ==>
+                law_collidable_symmetric p1 p2
+            )
+
+        it "law_collidable_symmetric for Player with another Object" $
+            property ( \(TestPlayer p) (TestObject o) ->
+                prop_inv_player p && prop_inv_object o ==>
+                law_collidable_symmetric p o
+            )
+
+        it "law_collidable_will_collide for Player with another Player" $
+            property ( \(TestPlayer p1) (TestPlayer p2) ->
+                prop_inv_player p1 && prop_inv_player p2 ==>
+                law_collidable_will_collide p1 p2
+            )
+
+        it "law_collidable_will_collide for Player with another Object" $
+            property ( \(TestPlayer p) (TestObject o) ->
+                prop_inv_player p && prop_inv_object o ==>
+                law_collidable_will_collide p o
+            )
+
+damageableLawsSpec :: Spec
+damageableLawsSpec = do
+    describe "Damageable laws (QuickCheck)" $ do
+        it "law_damageable_dead_stays_dead for Player" $
+            property (\(TestPlayer p) ->
+                forAll (choose (1, 100)) $ \damage ->
+                    prop_inv_player p ==>
+                    law_damageable_dead_stays_dead damage p
+            )
+
+        it "law_damageable_dead_idempotent for Player" $
+            property (\(TestPlayer p) ->
+                forAll (choose (1, 100)) $ \damage1 ->
+                forAll (choose (1, 100)) $ \damage2 ->
+                    prop_inv_player p ==>
+                    law_damageable_dead_idempotent damage1 damage2 p
+            )
+
+        it "law_damageable_zero_damage_identity for Player" $
+            property (\(TestPlayer p) ->
+                prop_inv_player p ==>
+                law_damageable_zero_damage_identity p
+            )
+
+        it "law_damageable_zero_damage_identity for Player" $
+            property (\(TestPlayer p) ->
+                forAll (choose (-100, -1)) $ \damage ->
+                    prop_inv_player p ==>
+                    law_damageable_no_heal_negative_damage damage p
+            )

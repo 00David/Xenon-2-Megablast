@@ -20,13 +20,8 @@ class Renderable a where
     -- Get a list of translated assets representing the 'a'
     getTranslatedAssets :: GameAssets -> a -> [Picture]
 
-law_renderable_does_not_modify :: (Renderable a, Eq a) => GameAssets -> a -> Bool
-law_renderable_does_not_modify ga x =
-    let _ = getTranslatedAssets ga x
-    in x == x
-
 law_renderable_finite :: Renderable a => GameAssets -> a -> Bool
-law_renderable_finite ga x = Prelude.length (getTranslatedAssets ga x) < 100
+law_renderable_finite ga x = Prelude.length (getTranslatedAssets ga x) < 100 -- ensures that the number of rendered assets stays reasonable
 
 -- ============================================================
 -- ======================== GAME ASSETS =======================
@@ -158,7 +153,7 @@ prop_pre_completeScoreString scoreStr
 prop_post_completeScoreString :: String -> Bool
 prop_post_completeScoreString scoreStr = 
     let resScoreStr = completeScoreString scoreStr 
-    in ((all isDigit resScoreStr) &&  (List.length resScoreStr == 7))
+    in ((all isDigit resScoreStr) &&  (List.length resScoreStr == 7)) -- exactly 7 digits as output
 
 -- Transforms an Int to its corresponding string of 7 digits, beeing completed by '0's at the beginning if needed,
 -- and beeing capped at a maximum value of 9999999 (7 digits)
@@ -171,10 +166,13 @@ scoreToString score
         scoreStr = show score
         l = List.length scoreStr
 
+prop_pre_scoreToString  :: Int -> Bool
+prop_pre_scoreToString score = score >= 0 -- don't handle negative scores
+
 prop_post_scoreToString :: Int -> Bool
 prop_post_scoreToString score =
     let scoreStr = scoreToString score
-    in List.length scoreStr == 7 && scoreStr <= "9999999"
+    in List.length scoreStr == 7 && scoreStr <= "9999999" -- exactly 7 digits (as string), capped at 9999999
 
 -- Gets score digit assets translated on the screen, for a given player score
 -- First argument : indicates if it is about player1's score (or player2's score) (if assets must be translated on the left or right part of the bottom bar)
@@ -190,9 +188,12 @@ getTranslatedScoreAssets ga isP1 score =
         aux i (d:ds) = ((Translate (xPadding+(27*(fromIntegral i)))) (bottomYScreenBound+16.5) (getDigitAsset ga (digitToInt d))):(aux (i+1) ds)
     in aux 0 scoreStr
 
+prop_pre_getTranslatedScoreAssets :: GameAssets -> Bool -> Int -> Bool
+prop_pre_getTranslatedScoreAssets _ _ score = score >= 0 -- don't handle negative scores
 
 prop_post_getTranslatedScoreAssets :: GameAssets -> Bool -> Int -> Bool
-prop_post_getTranslatedScoreAssets ga isP1 score = (List.length (getTranslatedScoreAssets ga isP1 score)) == 7
+prop_post_getTranslatedScoreAssets ga isP1 score = 
+    (List.length (getTranslatedScoreAssets ga isP1 score)) == 7 -- get as output an array of exactly 7 Picture (one for each score digit)
 
 -- ============================================================
 -- ==================== HEALTH BAR ASSETS =====================
@@ -225,36 +226,31 @@ getHealthAsset ga isP1 health =
 
 prop_pre_getHealthAsset :: GameAssets -> Int -> Bool
 prop_pre_getHealthAsset _ health
-    | health <= 0 || health > 100 = False
+    | health <= 0 || health > 100 = False -- health must be inside ]0, 100]
     | otherwise = True
 
 -- Returns the correct health assets for both players 1 and 2 given healths. 
 -- If a player has exactly 0 health, no asset is returned for him.
 getTranslatedHealthAssets :: GameAssets -> Int -> Int  -> [Picture]
-getTranslatedHealthAssets ga p1Health p2Health
-    | p1Health < 0 = error "player1 health must be positive"
-    | p1Health > 100 = error "player1 health cannot be greater than 100"
-    | p2Health < 0 = error "player2 health must be positive"
-    | p2Health > 100 = error "player1 health cannot be greater than 100"
-    | otherwise = 
-            (if p1Health == 0 then [] else [(Translate (-169) (bottomYScreenBound+17) (getHealthAsset ga True p1Health))])
-            ++
-            (if p2Health == 0 then [] else [(Translate 169 (bottomYScreenBound+17) (getHealthAsset ga True p2Health))])
+getTranslatedHealthAssets ga p1Health p2Health =
+    -- Here, getHealthAsset cannot be called with a player health parameter at 0
+    (if p1Health == 0 then [] else [(Translate (-169) (bottomYScreenBound+17) (getHealthAsset ga True p1Health))]) ++
+    (if p2Health == 0 then [] else [(Translate 169 (bottomYScreenBound+17) (getHealthAsset ga True p2Health))])
 
 prop_pre_getTranslatedHealthAssets :: GameAssets -> Int -> Int  -> Bool
 prop_pre_getTranslatedHealthAssets _ p1Health p2Health
-    | p1Health < 0 || p1Health > 100 = False
-    | p2Health < 0 || p2Health > 100 = False
+    | p1Health < 0 || p1Health > 100 = False -- health must be inside [0, 100]
+    | p2Health < 0 || p2Health > 100 = False -- health must be inside [0, 100]
     | otherwise = True
 
 prop_post_getTranslatedHealthAssets :: GameAssets -> Int -> Int -> Bool
 prop_post_getTranslatedHealthAssets ga p1Health p2Health =
     let healthAssets = getTranslatedHealthAssets ga p1Health p2Health
     in case (p1Health, p2Health) of
-        (0, 0) -> List.length healthAssets == 0
-        (0, _) -> List.length healthAssets == 1
-        (_, 0) -> List.length healthAssets == 1
-        _ -> List.length healthAssets == 2
+        (0, 0) -> List.length healthAssets == 0 -- both players at 0 health : no assets returned
+        (0, _) -> List.length healthAssets == 1 -- only one player at 0 health : the asset of the other one is returned
+        (_, 0) -> List.length healthAssets == 1 -- only one player at 0 health : the asset of the other one is returned
+        _ -> List.length healthAssets == 2 -- no player at 0 health, both health assets are returned
 
 -- ============================================================
 -- =============== BOTTOM DIGITS/P LETTER ASSETS ==============
@@ -280,14 +276,11 @@ initDigitAssets = do
 
 -- Returns the non-black digit asset for the given Int
 getDigitAsset :: GameAssets -> Int -> Picture
-getDigitAsset ga i
-    | i < 0 = error "Int cannot be strictly negative"
-    | i > 9 = error "Int cannot be strictly greater than 9"
-    | otherwise = Seq.index (digits (digitPics ga)) i
+getDigitAsset ga i = Seq.index (digits (digitPics ga)) i
 
 prop_pre_getDigitAsset :: GameAssets -> Int -> Bool
 prop_pre_getDigitAsset _ i
-    | i < 0 || i > 9 = False
+    | i < 0 || i > 9 = False -- the int must be a unique digit
     | otherwise = True
 
 -- ============================================================

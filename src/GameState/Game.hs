@@ -19,9 +19,10 @@ import Graphics.Background
 import Graphics.Explosion
 import Objects.Objects
 import Objects.Hitbox
-import Typeclasses.Damageable
 import Typeclasses.Invariant
 import Typeclasses.Movable
+import Typeclasses.Damageable
+import Typeclasses.Destroyable
 
 -- ============================================================
 -- =================== GAME INITIALISATION ====================
@@ -261,22 +262,19 @@ handleCollisionPlayerWithEnemies  isP1 (InGameInfos ss p1 p2 enemies gw projs ex
         (newEnemies, scoreFromEnemies) = foldr
             (\e (accEnemies, accScore) ->
                 if collision player e
-                    then case takeDamage 1 e of
+                    then case takeDamageMaybe 1 e of
                         Just e' -> (e':accEnemies, accScore)
                         Nothing -> (accEnemies, accScore + enemyScoreGiven e)
                     else (e:accEnemies, accScore)
                 ) ([], 0) enemies
 
         -- Then, we consider giving damages on the player colliding with enemies
-        newMaybePlayer = foldr
-                (\e maybePlayer ->
+        newPlayer = foldr
+                (\e p ->
                     if collision e player
-                        then maybePlayer >>= takeDamage (enemyCollisionDamage e)
-                        else maybePlayer
-                ) (Just player) enemies
-        newPlayer = case newMaybePlayer of
-            Just p -> (addScore scoreFromEnemies p)
-            Nothing -> error "player cannot be Nothing"
+                        then takeDamage (enemyCollisionDamage e) p
+                        else p
+                ) player enemies
     in 
         if isP1 then ((), initInGameInfos ss newPlayer p2 newEnemies gw projs expl bns)
         else ((), initInGameInfos ss p1 newPlayer newEnemies gw projs expl bns)
@@ -431,12 +429,12 @@ moveProjectiles (InGameInfos ss p1 p2 enemies walls projs expl bns) =
         ((), initInGameInfos ss p1 p2 enemies walls newProjectiles expl bns)
 
 prop_pre_moveProjectiles :: InGameInfos -> Bool
-prop_pre_moveProjectiles (InGameInfos _ _ _ _ _ projs _ _) = all insideScreenProjectile projs
+prop_pre_moveProjectiles (InGameInfos _ _ _ _ _ projs _ _) = all insideScreenOrAboveProjectile projs
 
 prop_post_moveProjectiles :: InGameInfos -> Bool
 prop_post_moveProjectiles igi@(InGameInfos ss p1 p2 enemies walls _ expl bns) = 
     let (_, (InGameInfos ss' p1' p2' enemies' walls' projs' expl' bns')) = moveProjectiles igi
-    in (all insideScreenProjectile projs')
+    in (all insideScreenOrAboveProjectile projs')
         && ss == ss' && p1 == p1' && p2 == p2' && enemies == enemies' && walls == walls' && expl == expl' && bns == bns'
 
 
@@ -447,7 +445,7 @@ applyProjectileToEnemy _ (Nothing, scoreP1, scoreP2) = (Nothing, scoreP1, scoreP
 applyProjectileToEnemy proj (Just enemy, scoreP1, scoreP2)
     | not (collision proj enemy) = (Just enemy, scoreP1, scoreP2)
     | otherwise = 
-        case takeDamage (projectileDamage proj) enemy of
+        case takeDamageMaybe (projectileDamage proj) enemy of
             Just e' -> (Just e', scoreP1, scoreP2)
             Nothing ->
                 let score = enemyScoreGiven enemy
@@ -492,28 +490,24 @@ handleCollisionProjectilesWithPlayersEnemies gen (InGameInfos ss p1 p2 enemies g
         playerProjectileExplosions = getExplosions playerProjectiles remainingPlayerProjectiles
 
         -- Secondly, we consider giving damages on the player1 colliding with enemies projectiles
-        newMaybeP1 = if isPlayerDead p1 then Just p1
+        newP1 = if isPlayerDead p1 then p1
                     else foldl
-                        (\maybePlayer proj ->
+                        (\p proj ->
                             if collision proj p1
-                                then maybePlayer >>= takeDamage (projectileDamage proj)
-                                else maybePlayer
-                        ) (Just p1) enemyProjectiles
-        newP1 = case newMaybeP1 of
-            Just p -> (addScore p1ScoreToAdd p)
-            Nothing -> error "player1 cannot be Nothing"
+                                then takeDamage (projectileDamage proj) p
+                                else p
+                        ) p1 enemyProjectiles
+        newP1' = (addScore p1ScoreToAdd newP1)
 
         -- Thirdly, we consider giving damages on the player2 colliding with enemies projectiles
-        newMaybeP2 = if isPlayerDead p2 then Just p2
+        newP2 = if isPlayerDead p2 then p2
                     else foldl
-                        (\maybePlayer proj ->
+                        (\p proj ->
                             if collision proj p2
-                                then maybePlayer >>= takeDamage (projectileDamage proj)
-                                else maybePlayer
-                        ) (Just p2) enemyProjectiles
-        newP2 = case newMaybeP2 of
-            Just p -> (addScore p2ScoreToAdd p)
-            Nothing -> error "player2 cannot be Nothing"
+                                then takeDamage (projectileDamage proj) p
+                                else p
+                        ) p2 enemyProjectiles
+        newP2' = (addScore p1ScoreToAdd newP2)
 
         -- We remove enemy projectiles that collided with at least one alive player
         remainingEnemyProjectiles = filter (\proj ->
@@ -530,7 +524,7 @@ handleCollisionProjectilesWithPlayersEnemies gen (InGameInfos ss p1 p2 enemies g
         -- and their explosions
         newExpl = expl ++ playerProjectileExplosions ++ enemyProjectileExplosions
 
-    in (gen', initInGameInfos ss newP1 newP2 newEnemies gw newProjectiles newExpl newBns)
+    in (gen', initInGameInfos ss newP1' newP2' newEnemies gw newProjectiles newExpl newBns)
 
 prop_post_handleCollisionProjectilesWithPlayersEnemies :: StdGen -> InGameInfos -> Bool
 prop_post_handleCollisionProjectilesWithPlayersEnemies gen igi@(InGameInfos ss p1 p2 enemies gw projs expl bns) =

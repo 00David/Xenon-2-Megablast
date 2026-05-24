@@ -40,9 +40,9 @@ library
       Objects.Hitbox
       Objects.Objects
       Typeclasses.Damageable
+      Typeclasses.Destroyable
       Typeclasses.Invariant
       Typeclasses.Movable
-      Utils
   other-modules:
       Paths_Xenon2_Megablast
   autogen-modules:
@@ -89,12 +89,14 @@ test-suite Xenon2-Megablast-test
       AssetsSpec
       BackgroundSpec
       EnemySpec
+      ExplosionSpec
       GameSpec
       HitboxSpec
       KeyboardSpec
       ObjectsSpec
       PlayerSpec
-      UtilsSpec
+      ProjectileSpec
+      RockSpec
       WallSpec
       Paths_Xenon2_Megablast
   autogen-modules:

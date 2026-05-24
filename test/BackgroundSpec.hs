@@ -10,22 +10,30 @@ import Graphics.Gloss (Picture (Blank))
 import Test.Hspec
 import Test.QuickCheck
 
+import GameSetup
+import Graphics.Assets
 import Graphics.Background
+import Typeclasses.Invariant
+import AssetsSpec(TestGameAssets(..))
 
 spec :: Spec
 spec = do
     initBackgroundSpec
     updateBackgroundSpec
     updateBackgroundQuickCheckSpec
+    getTranslatedBackgroundsQuickCheckSpec
+    invariantLawsSpec
+    renderableLawSpec
 
 newtype TestBackground = TestBackground { getBackground :: Background } deriving (Eq, Show)
 instance Arbitrary TestBackground where
+    arbitrary :: Gen TestBackground
     arbitrary = do    
         scrollingSpeed <- arbitrary
         y <- choose (0, heightBackgroundPicture-1)
         return $ TestBackground (Background Blank  scrollingSpeed y)
 
-prop_initBackground_preservesInvariant :: Float -> Float -> Property
+prop_initBackground_preservesInvariant :: Float -> YCoord -> Property
 prop_initBackground_preservesInvariant scrollingSpeed y =
     y >= 0 && y < heightBackgroundPicture ==> prop_inv_background (initBackground Blank scrollingSpeed y) 
 
@@ -58,9 +66,44 @@ updateBackgroundSpec = do
 updateBackgroundQuickCheckSpec :: Spec
 updateBackgroundQuickCheckSpec = do
     describe "updateBackground (QuickCheck)" $ do
-        it "satisfies updateBackground post-condition for all generated parameters" $
+        it "satisfies updateBackground post-condition for all valid parameters" $
             property (\dt (TestBackground bgnd) -> 
                 prop_inv_background bgnd && prop_pre_updateBackground dt bgnd
                 ==> let bgndPost = updateBackground dt bgnd
                 in prop_inv_background bgndPost && prop_post_updateBackground dt bgnd
                 )
+
+getTranslatedBackgroundsQuickCheckSpec :: Spec
+getTranslatedBackgroundsQuickCheckSpec = do
+    describe "getTranslatedBackgrounds (QuickCheck)" $ do
+        it "always returns 3 pictures for valid backgrounds" $
+            property (\(TestBackground bg) -> prop_post_getTranslatedBackgrounds bg)
+
+-- ============================================================
+-- ======================== LAWS ==============================
+-- ============================================================
+
+invariantLawsSpec :: Spec
+invariantLawsSpec = do
+    describe "Invariant laws (QuickCheck)" $ do
+
+        it "law_invariant_stable for Background" $
+            property (
+                \(TestBackground bgnd) ->
+                    law_invariant_stable bgnd
+            )
+
+        it "law_invariant_idempotent for Background" $
+            property (
+                \(TestBackground bgnd) ->
+                    law_invariant_idempotent bgnd
+            )
+
+renderableLawSpec :: Spec
+renderableLawSpec = do
+    describe "Renderable laws (QuickCheck)" $ do
+
+        it "law_renderable_finite for Background" $
+            property (\(TestGameAssets ga) (TestBackground bg) ->
+                law_renderable_finite ga bg
+            )

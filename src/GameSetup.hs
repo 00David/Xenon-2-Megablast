@@ -2,8 +2,6 @@ module GameSetup (module GameSetup) where
 
 import Data.Sequence
 
-import Typeclasses.Damageable
-
 -- ============================================================
 -- ===================== COMMON TYPES =========================
 -- ============================================================
@@ -12,6 +10,8 @@ type XCoord = Float
 type YCoord = Float
 type PlayerId = Int
 type Score = Int
+type Damage = Int
+type Health = Int
 type ShootDelay = Int
 type ScreenScrollingSpeed = Float
 type FrameCounter = Int
@@ -46,7 +46,7 @@ bonusDropChance :: Float
 bonusDropChance = 0.1 -- inside of [0, 1]
 
 -- ============================================================
--- ========================= ASSETS ===========================
+-- ====================== ASSET INFOS =========================
 -- ============================================================
 
 widthScreen :: Int
@@ -64,6 +64,9 @@ bottomYScreenBound :: YCoord
 bottomYScreenBound = -((fromIntegral heightScreen) / 2)
 bottomYScreenWithBarBound :: YCoord
 bottomYScreenWithBarBound = bottomYScreenBound+33 -- bottomYScreenBound counting bottom score bar
+
+heightBackgroundPicture:: Float
+heightBackgroundPicture = 1100
 
 widthEnemies :: Seq Float
 widthEnemies = fromList [60, 60, 72]

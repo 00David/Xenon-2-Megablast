@@ -2,7 +2,6 @@
 module Objects.Hitbox (module Objects.Hitbox) where
 
 import GameSetup
-import Utils
 import Typeclasses.Invariant
 
 -- ============================================================
@@ -11,16 +10,16 @@ import Typeclasses.Invariant
 
 type XCenter = Float
 type YCenter = Float
-type Radius = Float -- >= 0
+type Radius = Float
 
 type XBottomLeft = Float
 type YBottomLeft = Float
-type Width = Float -- > 0
-type Heigth = Float -- > 0
+type Width = Float
+type Heigth = Float
 
-data Hitbox = Circle XCenter YCenter Radius 
-    | Rectangle XBottomLeft YBottomLeft Width Heigth
-    | Hitboxes XCenter YCenter [Hitbox] -- x y center coordinates + length list of hitboxes > 0. The center must be part of at least 1 hitbox.
+data Hitbox = Circle XCenter YCenter Radius -- Radius must be >= 0
+    | Rectangle XBottomLeft YBottomLeft Width Heigth -- Width and Heigth must both be > 0
+    | Hitboxes XCenter YCenter [Hitbox] -- length [Hitbox] must be > 0. The center must be part of at least 1 contained hitbox.
     deriving (Eq, Show)
 
 prop_inv_hitbox :: Hitbox -> Bool
@@ -30,6 +29,10 @@ prop_inv_hitbox (Hitboxes x y l) =
     length l > 0
     && all prop_inv_hitbox l
     && any (partOfHitbox x y) l
+
+-- ============================================================
+-- =================== HITBOX CONSTRUCTORS ====================
+-- ============================================================
 
 initHitboxCircle :: XCenter -> YCenter -> Radius -> Hitbox
 initHitboxCircle x y r = if r < 0 then error "radius cannot be strictly negative" else (Circle x y r)
@@ -47,6 +50,10 @@ initHitboxes x y l
     | not (any (partOfHitbox x y) l) = error "(x,y) must be part of at least 1 contained hitbox"
     | otherwise = (Hitboxes x y l)
 
+-- ============================================================
+-- =================== HITBOX OPERATIONS ======================
+-- ============================================================
+
 -- Indicates if the given (x,y) coordinates are part of the given hitbox 
 partOfHitbox :: XCoord -> YCoord -> Hitbox -> Bool
 partOfHitbox x y (Circle xh yh r) = ((x - xh)*(x - xh)) + ((y - yh)*(y - yh)) <= r*r
@@ -62,6 +69,11 @@ centerHitbox :: Hitbox -> (XCenter, YCenter)
 centerHitbox (Circle x y _) = (x,y)
 centerHitbox (Rectangle x y w h) = (x + (w / 2), y + (h / 2))
 centerHitbox (Hitboxes x y _) = (x,y)
+
+prop_post_centerHitbox :: Hitbox -> Bool
+prop_post_centerHitbox h =
+    let (x, y) =  centerHitbox h
+    in partOfHitbox x y h -- Verifies that the (x,y) center of the hitbox is part of it
 
 -- Detects if there is a collision between 2 hitboxes
 collisionHitbox :: Hitbox -> Hitbox -> Bool
@@ -149,6 +161,15 @@ insideScreenOrAboveHitbox (Rectangle xBL yBL w h) =
     && xBL <= rightXScreenBound
     && yBL + h >= bottomYScreenBound
 insideScreenOrAboveHitbox (Hitboxes _ _ hitboxes) = all insideScreenOrAboveHitbox hitboxes
+
+-- Utility function, returns a value inside the [minV, maxV] range
+clamp :: Ord a => a -> a -> a -> a
+clamp v minV maxV = max minV (min v maxV)
+
+prop_post_clamp :: Ord a => a -> a -> a -> Bool
+prop_post_clamp v minV maxV = 
+    let v' = clamp v minV maxV
+    in minV <= v' && v' <= maxV -- Verifies that the returned value is inside [minV, maxV] range
 
 -- ============================================================
 -- ===================== HITBOX INVARIANT =====================

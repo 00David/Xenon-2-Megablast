@@ -9,7 +9,6 @@ import GameSetup
 import Graphics.Assets
 import Objects.Hitbox
 import Objects.Objects
-import Typeclasses.Damageable
 import Typeclasses.Invariant
 import Typeclasses.Movable
 
@@ -17,7 +16,7 @@ import Typeclasses.Movable
 -- ====================== PROJECTILE ==========================
 -- ============================================================
 
-type ProjectileAsset = Int -- 0 for a player shot. 0 or 1 for an enemy shot
+type ProjectileAsset = Int -- 0 or 1 for a player shot. 0 for an enemy shot
 -- type Damage = Int -- shot damage >= 0
 
 data Projectile = 
@@ -26,14 +25,13 @@ data Projectile =
     deriving (Eq, Show)
 
 prop_inv_projectile :: Projectile -> Bool
-prop_inv_projectile (PlayerShot po sI d pId) = prop_inv_object po && (sI >= 0 && sI <= (nbPlayerShotAssets-1)) && d >= 1
+prop_inv_projectile (PlayerShot po asset d pId) = prop_inv_object po && (asset >= 0 && asset <= (nbPlayerShotAssets-1)) && d >= 1
     && (pId == 1 || pId == 2)
-prop_inv_projectile (EnemyShot po sI d) = prop_inv_object po && (sI >= 0 && sI <= (nbEnemyShotAssets-1)) && d >= 1
+prop_inv_projectile (EnemyShot po asset d) = prop_inv_object po && (asset >= 0 && asset <= (nbEnemyShotAssets-1)) && d >= 1
 
-prop_pre_enemyShotObject :: Direction -> ObjectSpeed -> XCoord -> YCoord -> ProjectileAsset-> Bool
-prop_pre_enemyShotObject _ _ _ _ asset
-    | asset >= 0 && asset <= (nbEnemyShotAssets-1) = True
-    | otherwise = False
+-- ============================================================
+-- ================ PROJECTILE CONSTRUCTORS ===================
+-- ============================================================
 
 initPlayerShot :: Object -> ProjectileAsset -> Damage -> PlayerId -> Projectile
 initPlayerShot po asset d pId
@@ -68,6 +66,10 @@ startInitEnemyShot x y os asset d =
 prop_pre_startInitEnemyShot :: XCoord -> YCoord -> ObjectSpeed -> ProjectileAsset -> Damage -> Bool
 prop_pre_startInitEnemyShot _ _ _ asset d = asset >= 0 && asset <= (nbEnemyShotAssets-1) && d > 0
 
+-- ============================================================
+-- ================= PROJECTILE OPEARATIONS ===================
+-- ============================================================
+
 projectileObject :: Projectile -> Object
 projectileObject (PlayerShot obj _ _ _) = obj
 projectileObject (EnemyShot obj _ _) = obj
@@ -97,9 +99,20 @@ moveProjectile proj ss =
         if (isPlayerShot proj) then (initPlayerShot newPo (projectileAsset proj) (projectileDamage proj)(projectilePlayerId proj))
         else (initEnemyShot newPo (projectileAsset proj) (projectileDamage proj))
 
--- Indicates if a projectile is inside the screen. It is considered outside when COMPLETELY outside.
-insideScreenProjectile :: Projectile -> Bool
-insideScreenProjectile proj = insideScreenOrAboveHitbox (objectHitbox (projectileObject proj))
+prop_pre_moveProjectile :: Projectile -> ScreenScrollingSpeed -> Bool
+prop_pre_moveProjectile _ ss = ss >= 0 -- screen scrolling speed positive
+
+prop_post_moveProjectile :: Projectile -> ScreenScrollingSpeed -> Bool
+prop_post_moveProjectile proj ss = 
+    let proj' = moveProjectile proj ss
+    in case (proj, proj') of -- ensures that all other attributes than the object stay the same, as well as the projectile type
+        ((PlayerShot _ asset d pId), (PlayerShot _ asset' d' pId')) -> asset == asset' && d == d' && pId == pId'
+        ((EnemyShot _ asset d), (EnemyShot _ asset' d')) -> asset == asset' && d == d'
+        _ -> False
+
+-- Indicates if a projectile is inside the screen or above.
+insideScreenOrAboveProjectile :: Projectile -> Bool
+insideScreenOrAboveProjectile proj = insideScreenOrAboveHitbox (objectHitbox (projectileObject proj))
 
 -- ============================================================
 -- ================= PROJECTILE INVARIANT =====================
@@ -115,18 +128,21 @@ instance Invariant Projectile where
 
 instance Renderable Projectile where
     getTranslatedAssets :: GameAssets -> Projectile -> [Picture]
-    getTranslatedAssets ga player = getTranslatedProjectileAssets ga player
+    getTranslatedAssets ga player = getTranslatedProjectileAsset ga player
 
--- Returns a list of translated projectile assets.
-getTranslatedProjectileAssets :: GameAssets -> Projectile -> [Picture]
-getTranslatedProjectileAssets ga (PlayerShot po asset _ pId) = 
+-- Returns a translated projectile asset.
+getTranslatedProjectileAsset :: GameAssets -> Projectile -> [Picture]
+getTranslatedProjectileAsset ga (PlayerShot po asset _ pId) = 
     let (px, py) = centerHitbox (objectHitbox po)
     in 
-        if pId == 1 then [Translate px py (Seq.index (player1ShotPics ga) asset)]-- ++ (translateHitbox h)
-        else [Translate px py (Seq.index (player2ShotPics ga) asset)]-- ++ (translateHitbox h)
-getTranslatedProjectileAssets ga (EnemyShot po asset _) =
+        if pId == 1 then [Translate px py (Seq.index (player1ShotPics ga) asset)]
+        else [Translate px py (Seq.index (player2ShotPics ga) asset)]
+getTranslatedProjectileAsset ga (EnemyShot po asset _) =
     let (px, py) = centerHitbox (objectHitbox po)
-    in [Translate px py (Seq.index (enemyShotPics ga) asset)]-- ++ (translateHitbox h)
+    in [Translate px py (Seq.index (enemyShotPics ga) asset)]
+
+prop_post_getTranslatedProjectileAsset :: GameAssets -> Projectile -> Bool
+prop_post_getTranslatedProjectileAsset ga proj = length (getTranslatedProjectileAsset ga proj) == 1 -- exactly one projectile asset
 
 -- ============================================================
 -- =================== PROJECTILE MOVABLE =====================
@@ -137,7 +153,7 @@ instance Movable Projectile where
     move = moveProjectile
 
     insideScreen :: Projectile -> Bool
-    insideScreen = insideScreenProjectile
+    insideScreen = insideScreenOrAboveProjectile
 
 -- ============================================================
 -- ================= PROJECTILE COLLIDABLE ====================

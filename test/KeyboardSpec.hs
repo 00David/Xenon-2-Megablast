@@ -1,5 +1,7 @@
+{-# LANGUAGE InstanceSigs #-}
 module KeyboardSpec (
     TestKeyboard(..),
+    TestKey(..),
     spec
 )
 where
@@ -24,6 +26,7 @@ spec = do
 
 newtype TestKey = TestKey { getKey :: Key } deriving (Eq, Show)
 instance Arbitrary TestKey where
+    arbitrary :: Gen TestKey
     arbitrary = do
         key <- oneof 
             [ SpecialKey <$> elements [KeyLeft, KeyRight, KeyUp, KeyDown, KeyBackspace, KeyDelete, KeyEnter, KeyEsc, KeySpace]
@@ -32,6 +35,7 @@ instance Arbitrary TestKey where
 
 newtype TestKeyboard = TestKeyboard { getKeyboard :: Keyboard } deriving (Eq, Show)
 instance Arbitrary TestKeyboard where
+    arbitrary :: Gen TestKeyboard
     arbitrary = do
         keys <- listOf arbitrary
         return $ TestKeyboard (fromList (Prelude.map getKey keys))
@@ -46,33 +50,45 @@ player1NewDirectionSpeedSpec = do
         dir `shouldBe` initDirection 0 0
         os  `shouldBe` initObjectSpeed 0
 
-    it "left key -> move left" $ do
-        let kbd = insert (SpecialKey KeyLeft) initKeyboard
+    it "left key (q) -> move left" $ do
+        let kbd = insert (Char 'q') initKeyboard
+            (dir, os) = player1NewDirectionSpeed kbd 1.0
+        dir `shouldBe` initDirection (-1) 0
+        os  `shouldBe` initObjectSpeed playerDefaultSpeed
+
+    it "left key (a) -> move left (AZERTY alternative)" $ do
+        let kbd = insert (Char 'a') initKeyboard
             (dir, os) = player1NewDirectionSpeed kbd 1.0
         dir `shouldBe` initDirection (-1) 0
         os  `shouldBe` initObjectSpeed playerDefaultSpeed
 
     it "right key -> move right" $ do
-        let kbd = insert (SpecialKey KeyRight) initKeyboard
+        let kbd = insert (Char 'd') initKeyboard
             (dir, os) = player1NewDirectionSpeed kbd 1.0
         dir `shouldBe` initDirection 1 0
         os  `shouldBe` initObjectSpeed playerDefaultSpeed
 
-    it "up key -> move up" $ do
-        let kbd = insert (SpecialKey KeyUp) initKeyboard
+    it "up key (z) -> move up" $ do
+        let kbd = insert (Char 'z') initKeyboard
             (dir, os) = player1NewDirectionSpeed kbd 1.0
         dir `shouldBe` initDirection 0 1
         os  `shouldBe` initObjectSpeed playerDefaultSpeed
 
-    it "down key -> move down" $ do
-        let kbd = insert (SpecialKey KeyDown) initKeyboard
+    it "up key (w) -> move up (QWERTY)" $ do
+        let kbd = insert (Char 'w') initKeyboard
+            (dir, os) = player1NewDirectionSpeed kbd 1.0
+        dir `shouldBe` initDirection 0 1
+        os  `shouldBe` initObjectSpeed playerDefaultSpeed
+
+    it "down key (s) -> move down" $ do
+        let kbd = insert (Char 's') initKeyboard
             (dir, os) = player1NewDirectionSpeed kbd 1.0
         dir `shouldBe` initDirection 0 (-1)
         os  `shouldBe` initObjectSpeed playerDefaultSpeed
 
-    it "opposite keys cancel (left + right)" $ do
-        let kbd = insert (SpecialKey KeyLeft)
-                $ insert (SpecialKey KeyRight)
+    it "opposite keys cancel (q + d)" $ do
+        let kbd = insert (Char 'q')
+                $ insert (Char 'd')
                 $ initKeyboard
             (dir, os) = player1NewDirectionSpeed kbd 1.0
         dir `shouldBe` initDirection 0 0
@@ -97,51 +113,33 @@ player2NewDirectionSpeedSpec = do
         dir `shouldBe` initDirection 0 0
         os  `shouldBe` initObjectSpeed 0
 
-    it "q key -> move left (AZERTY)" $ do
-        let kbd = insert (Char 'q') initKeyboard
+    it "left key -> move left" $ do
+        let kbd = insert (SpecialKey KeyLeft) initKeyboard
             (dir, os) = player2NewDirectionSpeed kbd 1.0
         dir `shouldBe` initDirection (-1) 0
         os  `shouldBe` initObjectSpeed playerDefaultSpeed
 
-    it "d key -> move right" $ do
-        let kbd = insert (Char 'd') initKeyboard
+    it "right key -> move right" $ do
+        let kbd = insert (SpecialKey KeyRight) initKeyboard
             (dir, os) = player2NewDirectionSpeed kbd 1.0
         dir `shouldBe` initDirection 1 0
         os  `shouldBe` initObjectSpeed playerDefaultSpeed
 
-    it "z key -> move up (AZERTY)" $ do
-        let kbd = insert (Char 'z') initKeyboard
+    it "up key -> move up" $ do
+        let kbd = insert (SpecialKey KeyUp) initKeyboard
             (dir, os) = player2NewDirectionSpeed kbd 1.0
         dir `shouldBe` initDirection 0 1
         os  `shouldBe` initObjectSpeed playerDefaultSpeed
 
-    it "s key -> move down" $ do
-        let kbd = insert (Char 's') initKeyboard
+    it "down key -> move down" $ do
+        let kbd = insert (SpecialKey KeyDown) initKeyboard
             (dir, os) = player2NewDirectionSpeed kbd 1.0
         dir `shouldBe` initDirection 0 (-1)
         os  `shouldBe` initObjectSpeed playerDefaultSpeed
 
-    it "w key -> move up (QWERTY)" $ do
-        let kbd = insert (Char 'w') initKeyboard
-            (dir, os) = player2NewDirectionSpeed kbd 1.0
-        dir `shouldBe` initDirection 0 1
-        os  `shouldBe` initObjectSpeed playerDefaultSpeed
-
-    it "a key -> move left (QWERTY)" $ do
-        let kbd = insert (Char 'a') initKeyboard
-            (dir, os) = player2NewDirectionSpeed kbd 1.0
-        dir `shouldBe` initDirection (-1) 0
-        os  `shouldBe` initObjectSpeed playerDefaultSpeed
-
-    it "uppercase works (Z)" $ do
-        let kbd = insert (Char 'Z') initKeyboard
-            (dir, os) = player2NewDirectionSpeed kbd 1.0
-        dir `shouldBe` initDirection 0 1
-        os  `shouldBe` initObjectSpeed playerDefaultSpeed
-
-    it "opposite keys cancel (q + d)" $ do
-        let kbd = insert (Char 'q')
-                $ insert (Char 'd')
+    it "opposite keys cancel (left + right)" $ do
+        let kbd = insert (SpecialKey KeyLeft)
+                $ insert (SpecialKey KeyRight)
                 $ initKeyboard
             (dir, os) = player2NewDirectionSpeed kbd 1.0
         dir `shouldBe` initDirection 0 0

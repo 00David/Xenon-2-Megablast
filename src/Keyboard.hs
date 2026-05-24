@@ -6,16 +6,22 @@ import Data.Set
 import GameSetup
 import Objects.Objects
 
+-- ============================================================
+-- ======================= KEYBOARD ===========================
+-- ============================================================
+
 type Keyboard = Set Key
 
 initKeyboard :: Keyboard
 initKeyboard = empty
 
+-- 'Marks' or 'unmarks' a key as pressed
 handleKeyEvent :: Event -> Keyboard -> Keyboard
 handleKeyEvent (EventKey key Down _ _) kbd = insert key kbd
 handleKeyEvent (EventKey key Up _ _) kbd = delete key kbd
 handleKeyEvent _ kbd = kbd   
 
+-- Indicates if a key is cirrently pressed
 isKeyDown :: Key -> Keyboard -> Bool
 isKeyDown = member
 
@@ -39,7 +45,7 @@ player1NewDirectionSpeed kbd deltaTime =
         newDir = (initDirection newXDir newYDir)
         newSpeed = if newXDir /= 0 || newYDir /= 0 then playerDefaultSpeed*deltaTime else 0
         newObjectSpeed = (initObjectSpeed newSpeed)
-        --trace (show (Direction newXDir newYDir)) $
+
     in (newDir, newObjectSpeed)
 
 -- Gives a new direction and object speed for player2 (up/left/down/right keys)
@@ -57,8 +63,8 @@ player2NewDirectionSpeed kbd deltaTime =
         newDir = (initDirection newXDir newYDir)
         newSpeed = if newXDir /= 0 || newYDir /= 0 then playerDefaultSpeed*deltaTime else 0
         newObjectSpeed = (initObjectSpeed newSpeed)
-        --trace (show (Direction newXDir newYDir)) $
+
     in (newDir, newObjectSpeed)
 
 prop_pre_playerNewDirectionSpeed :: Keyboard -> Float -> Bool
-prop_pre_playerNewDirectionSpeed _ dt = dt >=0
+prop_pre_playerNewDirectionSpeed _ dt = dt >=0 -- The given float, got by updateIO, must be positive

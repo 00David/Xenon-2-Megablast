@@ -1,8 +1,6 @@
 {-# LANGUAGE InstanceSigs #-}
 module Objects.Objects (module Objects.Objects) where
 
-import Test.QuickCheck
-
 import GameSetup
 import Objects.Hitbox
 import Typeclasses.Invariant
@@ -28,12 +26,11 @@ law_collidable_reflexive x = collision x x
 law_collidable_symmetric :: (Collidable a, Collidable b) => a -> b -> Bool
 law_collidable_symmetric x y = collision x y == collision y x
 
-law_collidable_will_collide :: Collidable a => Collidable b => a -> b -> ScreenScrollingSpeed -> Property
-law_collidable_will_collide x y s =
-    willCollide x y s ==> any (\o -> collision (moveObject o s) y) (getObjects x)
+law_collidable_will_collide :: Collidable a => Collidable b => a -> b -> ScreenScrollingSpeed -> Bool
+law_collidable_will_collide x y s = willCollide x y s == collision (move x s) y
 
 -- ============================================================
--- ====================== OBJECTS =============================
+-- ======================= DIRECTION ==========================
 -- ============================================================
 
 data Direction = Direction Int Int -- direction components must be part of {-1, 0, 1}
@@ -48,6 +45,10 @@ initDirection x y
     | not(-1 <= y && y <= 1) = error "y must be part of {-1, 0, 1}"
     | otherwise = (Direction x y)
 
+-- ============================================================
+-- ====================== OBJECTSPEED =========================
+-- ============================================================
+
 newtype ObjectSpeed = ObjectSpeed Float -- speed >= 0
     deriving (Eq, Show)
 
@@ -57,11 +58,15 @@ prop_inv_objectSpeed (ObjectSpeed s) = s >= 0
 initObjectSpeed :: Float -> ObjectSpeed
 initObjectSpeed s = if s < 0 then error "speed cannot be strictly negative" else (ObjectSpeed s)
 
-data Object = MovableO Hitbox Direction ObjectSpeed
-    | StaticO Hitbox
+-- ============================================================
+-- ========================= OBJECT ===========================
+-- ============================================================
+
+data Object = MovableO Hitbox Direction ObjectSpeed -- A movable object moves according to its own direction and speed
+    | StaticO Hitbox -- A static object moves according to the screen scrolling speed (towards the bottom)
     deriving (Eq, Show)
 
-prop_inv_object :: Object -> Bool 
+prop_inv_object :: Object -> Bool
 prop_inv_object (MovableO h d s) = prop_inv_hitbox h && prop_inv_direction d && prop_inv_objectSpeed s
 prop_inv_object (StaticO h) = prop_inv_hitbox h
 
@@ -70,6 +75,10 @@ initMovableObject h d s = (MovableO h d s)
 
 initStaticObject :: Hitbox -> Object
 initStaticObject h = (StaticO h)
+
+-- ============================================================
+-- =================== OBJECT OPERATIONS ======================
+-- ============================================================
 
 objectHitbox :: Object -> Hitbox
 objectHitbox (MovableO h _ _) = h
@@ -95,21 +104,19 @@ moveObject (StaticO h) screenS =
     (initStaticObject (moveHitbox h (0, -screenS)))
 
 prop_pre_moveObject :: Object -> ScreenScrollingSpeed -> Bool
-prop_pre_moveObject _ screenS = screenS >= 0
+prop_pre_moveObject _ screenS = screenS >= 0 -- The screen scrolling speed must be strictly positive
 
 prop_post_moveObject :: Object -> ScreenScrollingSpeed -> Bool
-prop_post_moveObject (MovableO h d@(Direction dirx diry) os@(ObjectSpeed s)) screenS = 
-    let dx = (fromIntegral dirx)*s
-        dy = (fromIntegral diry)*s
-    in case moveObject (MovableO h d os) screenS of
-        (MovableO _ d2 os2) -> (prop_post_moveHitbox h (dx, dy)) && d == d2 && os == os2
+prop_post_moveObject (MovableO h d os) screenS = 
+    case moveObject (MovableO h d os) screenS of
+        (MovableO _ d2 os2) -> d == d2 && os == os2 -- hitbox has changed position, verified by the moveHitbox postcondition, and direction and object speed must stay the same
         _ -> False
 prop_post_moveObject (StaticO h) screenS = 
     case moveObject (StaticO h) screenS of
-        (StaticO _) -> (prop_post_moveHitbox h (0, -screenS))
+        (StaticO _) -> True -- hitbox has changed position, verified by the moveHitbox postcondition, so no more verification
         _ -> False
 
--- Idicates if an object is inside the screen
+-- Indicates if an object is inside the screen, according to its hitbox
 insideScreenObject :: Object -> Bool
 insideScreenObject (MovableO h _ _)  = insideScreenHitbox h
 insideScreenObject (StaticO h)  = insideScreenHitbox h

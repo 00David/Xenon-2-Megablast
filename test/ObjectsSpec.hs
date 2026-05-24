@@ -1,3 +1,4 @@
+{-# LANGUAGE InstanceSigs #-}
 module ObjectsSpec (
     TestObject(..),
     TestDirection(..),
@@ -9,8 +10,10 @@ where
 import Test.Hspec
 import Test.QuickCheck
 
+import GameSetup
 import Objects.Hitbox
 import Objects.Objects
+import Typeclasses.Invariant
 import HitboxSpec(TestHitbox(..))
 
 spec :: Spec
@@ -23,8 +26,11 @@ spec = do
   objectGetSpeedSpec
   moveObjectSpec
   moveObjectQuickCheckSpec
+  insideScreenObjectSpec
   collisionObjectSpec
   commutativityCollisionObjectSpec
+  invariantLawsSpec
+  collidableLawsSpec
 
 -- ============================================================
 -- ====================== OBJECTS =============================
@@ -32,6 +38,7 @@ spec = do
 
 newtype TestDirection = TestDirection { getDirection :: Direction } deriving (Eq, Show)
 instance Arbitrary TestDirection where
+    arbitrary :: Gen TestDirection
     arbitrary = do
         x <- elements [-1,0,1]
         y <- elements [-1,0,1]
@@ -52,9 +59,10 @@ initDirectionSpec = do
 
 newtype TestObjectSpeed = TestObjectSpeed { getObjectSpeed :: ObjectSpeed } deriving (Eq, Show)
 instance Arbitrary TestObjectSpeed where
+    arbitrary :: Gen TestObjectSpeed
     arbitrary = TestObjectSpeed . ObjectSpeed <$> arbitrary `suchThat` (>= 0)
 
-prop_initObjectSpeed_preservesInvariant :: Float -> Property
+prop_initObjectSpeed_preservesInvariant :: ScreenScrollingSpeed -> Property
 prop_initObjectSpeed_preservesInvariant s =
     s >= 0 ==> prop_inv_objectSpeed (initObjectSpeed s)
 
@@ -67,6 +75,7 @@ initObjectSpeedSpec = do
 
 newtype TestObject = TestObject { getObject :: Object } deriving (Eq, Show)
 instance Arbitrary TestObject where
+    arbitrary :: Gen TestObject
     arbitrary = do
         h <- arbitrary :: Gen TestHitbox
         d <- arbitrary :: Gen TestDirection
@@ -176,6 +185,35 @@ moveObjectQuickCheckSpec = do
                     prop_inv_object postO && prop_post_moveObject o screenS
                 )
 
+insideScreenObjectSpec :: Spec
+insideScreenObjectSpec = do
+    describe "insideScreenObject (unit tests)" $ do
+
+        it "Movable object fully inside screen" $ do
+            let h = Rectangle (-10) (-10) 20 20
+                o = MovableO h (Direction 0 0) (ObjectSpeed 0)
+            insideScreenObject o `shouldBe` True
+
+        it "Static object fully inside screen" $ do
+            let h = Rectangle (-10) (-10) 20 20
+                o = StaticO h
+            insideScreenObject o `shouldBe` True
+
+        it "Movable object outside left screen" $ do
+            let h = Rectangle (leftXScreenBound - 100) 0 10 10
+                o = MovableO h (Direction 0 0) (ObjectSpeed 0)
+            insideScreenObject o `shouldBe` False
+
+        it "Static object outside bottom screen" $ do
+            let h = Rectangle 0 (bottomYScreenBound - 100) 10 10
+                o = StaticO h
+            insideScreenObject o `shouldBe` False
+
+        it "Circle partially outside is still considered correctly via hitbox rule" $ do
+            let h = Circle (rightXScreenBound - 1) 0 50
+                o = StaticO h
+            insideScreenObject o `shouldBe` False
+
 collisionObjectSpec :: Spec
 collisionObjectSpec = do
     describe "collisionObject (unit tests)" $ do
@@ -239,3 +277,69 @@ commutativityCollisionObjectSpec = do
                 (prop_inv_object o1 && prop_inv_object o2)
                 ==> prop_commutativity_collisionObject o1 o2
                 )
+
+-- ============================================================
+-- ======================== LAWS ==============================
+-- ============================================================
+
+invariantLawsSpec :: Spec
+invariantLawsSpec = do
+    describe "Invariant laws (QuickCheck)" $ do
+
+        it "law_invariant_stable for Direction" $
+            property (
+                \(TestDirection d) ->
+                    law_invariant_stable d
+            )
+
+        it "law_invariant_idempotent for Direction" $
+            property (
+                \(TestDirection d) ->
+                    law_invariant_idempotent d
+            )
+
+        it "law_invariant_stable for ObjectSpeed" $
+            property (
+                \(TestObjectSpeed os) ->
+                    law_invariant_stable os
+            )
+
+        it "law_invariant_idempotent for ObjectSpeed" $
+            property (
+                \(TestObjectSpeed os) ->
+                    law_invariant_idempotent os
+            )
+
+        it "law_invariant_stable for Object" $
+            property (
+                \(TestObject o) ->
+                    law_invariant_stable o
+            )
+
+        it "law_invariant_idempotent for Object" $
+            property (
+                \(TestObject o) ->
+                    law_invariant_idempotent o
+            )
+
+collidableLawsSpec :: Spec
+collidableLawsSpec = do
+    describe "Collidable laws (QuickCheck)" $ do
+
+        it "law_collidable_reflexive for Object" $
+            property ( \(TestObject o) ->
+                prop_inv_object o ==>
+                law_collidable_reflexive o
+            )
+
+        it "law_collidable_symmetric for Object" $
+            property ( \(TestObject o1) (TestObject o2) ->
+                prop_inv_object o1 && prop_inv_object o2 ==>
+                law_collidable_symmetric o1 o2
+            )
+
+        it "law_collidable_will_collide for Object" $
+            property ( \(TestObject o1) (TestObject o2) ->
+                prop_inv_object o1 && prop_inv_object o2 ==>
+                law_collidable_will_collide o1 o2
+            )

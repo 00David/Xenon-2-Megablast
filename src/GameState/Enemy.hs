@@ -12,7 +12,7 @@ import GameState.Projectile
 import Graphics.Assets
 import Objects.Hitbox
 import Objects.Objects
-import Typeclasses.Damageable
+import Typeclasses.Destroyable
 import Typeclasses.Invariant
 import Typeclasses.Movable
 
@@ -580,15 +580,12 @@ instance Collidable Enemy where
         in any (\o1 -> any (\o2 -> collisionObject o1 o2) objs2) movedObjs1
 
 -- ============================================================
--- ==================== ENEMY DAMAGEABLE ======================
+-- ==================== ENEMY DESTROYABLE =====================
 -- ============================================================
 
-instance Damageable Enemy where
-    currentHealth :: Enemy -> Maybe Health
-    currentHealth e = Just (enemyHealth e) -- if it exists, an enemy cannot be dead
-
-    takeDamage :: Damage -> Enemy -> Maybe Enemy
-    takeDamage d (Enemy obj health dmg score script) = 
+instance Destroyable Enemy where
+    takeDamageMaybe :: Damage -> Enemy -> Maybe Enemy
+    takeDamageMaybe d (Enemy obj health dmg score script) = 
         let newHealth = health-d
         in
             if newHealth > 0 then Just (initEnemy obj newHealth dmg score script)
