@@ -164,8 +164,11 @@ startInitDeadPlayer pId =
         newPo = initPlayerObject xP yP (initDirection 0 0) (initObjectSpeed 0)
     in initDeadPlayer newPo pId 0 1 6
 
+prop_pre_startInitPlayer :: PlayerId -> Bool -- applied both to startInitAlivePlayer and startInitDeadPlayer
+prop_pre_startInitPlayer pId = pId == 1 || pId == 2
+
 -- ============================================================
--- ================== PLAYER OPEARATIONS ======================
+-- ================== PLAYER OPERATIONS =======================
 -- ============================================================
 
 -- Converts an alive player with no healh and strictly more than one life remaining to an invincible player with a life less 
@@ -399,7 +402,7 @@ movePlayer p@(DeadP po pId score frameCpt phase) ss =
         else p
 
 prop_pre_movePlayer :: Player -> ScreenScrollingSpeed -> Bool
-prop_pre_movePlayer _ ss = ss >= 0 --screen scrolling speed positive
+prop_pre_movePlayer _ ss = ss > 0 --screen scrolling speed strictly positive
 
 prop_post_movePlayer :: Player -> ScreenScrollingSpeed -> Bool
 prop_post_movePlayer p@(AliveP _ pId lifes health score psb frameShootCpt frameRedCpt) ss = 

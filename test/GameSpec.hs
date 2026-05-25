@@ -18,6 +18,7 @@ import GameState.Game
 import GameState.Player
 import GameState.Projectile
 import GameState.Wall
+import Graphics.Assets
 import Objects.Hitbox
 import Objects.Objects
 import Typeclasses.Invariant
@@ -68,6 +69,7 @@ spec = do
     handleCollisionPlayerWithBonusesQuickCheckSpec
     incrementPlayersShootFrameCountersQuickCheckSpec
     invariantGameLawsSpec
+    renderableGameLawSpec
 
 fixedGenSeed :: Int
 fixedGenSeed = 42 -- for creating generators in unit tests
@@ -558,7 +560,7 @@ runEnemiesQuickCheckSpec = do
     describe "runEnemies (QuickCheck)" $ do
         it "satisfies runEnemies post-condition for all valid parameters" $
             property (\(TestInGameInfos igi) ->
-                prop_inv_ingameinfos igi && prop_pre_runEnemies igi
+                prop_inv_ingameinfos igi
                 ==> let (_, igi') = runEnemies igi
                     in prop_inv_ingameinfos igi' && prop_post_runEnemies igi
             )
@@ -725,3 +727,13 @@ invariantGameLawsSpec = do
             property (
                 \(TestInGameInfos igi) -> law_invariant_idempotent igi
             )
+
+renderableGameLawSpec :: Spec
+renderableGameLawSpec = do
+    describe "Renderable laws (QuickCheck)" $ do
+        it "law_renderable_finite for StartMenuOption" $
+            property (\(TestGameAssets ga) (TestStartMenuOption option) ->
+                law_renderable_finite ga option
+            )
+        -- InGameInfos is an instance of Renderable, but does not necesarily follow the law (its contained infos
+        -- can have a total of more than 100 assets) so not tested here.

@@ -82,8 +82,8 @@ runExplosionQuickCheckSpec = do
             property ( \(TestExplosion e) ->
                 prop_inv_explosion e ==>
                     case runExplosion e of
-                        Just e' -> prop_inv_explosion e'
-                        Nothing -> True
+                        Just e' -> prop_inv_explosion e' && prop_post_runExplosion e
+                        Nothing -> prop_post_runExplosion e
             )
 
 getExplosionsSpec :: Spec

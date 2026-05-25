@@ -196,7 +196,7 @@ prop_post_updatePlayerDirectionSpeed isP1 (dir, os) igi@(InGameInfos _ _ _ _ _ _
         dir2' = (objectDirection po2')
         os1' = (objectSpeed po1')
         os2' = (objectSpeed po2')
-    in (sameInGameInfosExceptPlayer isP1 igi igi') -- everything stays the same for the player, except its nex direction and object speed
+    in (sameInGameInfosExceptPlayer isP1 igi igi') -- everything stays the same for the player, except its new direction and object speed
         && if isP1
             then not (isPlayerDead p1') && dir == dir1' && os == os1'
             else not (isPlayerDead p2') && dir == dir2' && os == os2'
@@ -458,11 +458,11 @@ applyProjectileToEnemy proj (Just enemy, scoreP1, scoreP2)
                     2 -> (Nothing, scoreP1, scoreP2 + score)
                     _ -> (Nothing, scoreP1, scoreP2)
 
-prop_pre_applyProjectileToEnemy :: Projectile -> (Maybe Enemy, Int, Int) -> Bool
+prop_pre_applyProjectileToEnemy :: Projectile -> (Maybe Enemy, Score, Score) -> Bool
 prop_pre_applyProjectileToEnemy proj (_, scoreP1, scoreP2) = 
     scoreP1 >= 0 && scoreP2 >= 0 && isPlayerShot proj -- only null or positive scores, and player shot as a parameter
 
-prop_post_applyProjectileToEnemy :: Projectile -> (Maybe Enemy, Int, Int) -> Bool
+prop_post_applyProjectileToEnemy :: Projectile -> (Maybe Enemy, Score, Score) -> Bool
 prop_post_applyProjectileToEnemy proj (maybeEnemy, scoreP1, scoreP2) =
     let (_, scoreP1', scoreP2') = applyProjectileToEnemy proj (maybeEnemy, scoreP1, scoreP2)
     in  -- a player score (and only one of them) might have been incremented on an enemy kill (with its projectile)
@@ -536,7 +536,7 @@ prop_post_handleCollisionProjectilesWithPlayersEnemies :: StdGen -> InGameInfos 
 prop_post_handleCollisionProjectilesWithPlayersEnemies gen igi@(InGameInfos ss p1 p2 enemies gw projs expl bns) =
     let (_, (InGameInfos ss' p1' p2' enemies' gw' projs' expl' bns')) = (handleCollisionProjectilesWithPlayersEnemies gen igi)
     in 
-        -- we can have less enemies, player lifes descreased, player scores increased, new bonuses or explosions that spawned in the screen
+        -- we can have less enemies, player lifes decreased, player scores increased, new bonuses or explosions might have spawned in the screen
         (length enemies') <= (length enemies) && (length projs') <= (length projs)
         && (playerLifes p1') <= (playerLifes p1) && (playerScore p1') >= (playerScore p1) 
         && (playerLifes p2') <= (playerLifes p2) && (playerScore p2') >= (playerScore p2)
@@ -566,10 +566,6 @@ runEnemies (InGameInfos ss p1 p2 enemies gw projs expl bns) =
         allProjectiles = projs ++ newProjectiles
         
     in ((), initInGameInfos ss p1 p2 insideScreenEnemies gw allProjectiles expl bns)
-
-prop_pre_runEnemies :: InGameInfos -> Bool
-prop_pre_runEnemies (InGameInfos ss _ _ enemies _ _ _ _) = 
-    ss > 0 && all (\e -> prop_pre_moveEnemy e ss) enemies
 
 prop_post_runEnemies :: InGameInfos -> Bool
 prop_post_runEnemies igi@(InGameInfos ss p1 p2 enemies gw projs expl bns) =

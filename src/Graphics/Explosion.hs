@@ -54,6 +54,25 @@ runExplosion (Explosion x y cpt phase)
         else Just (initExplosion x y 1 (phase+1)) -- otherwise, reset the frame counter and go to the next explosion phase
     | otherwise = error $ "impossible case "++(show cpt)++" "++(show phase)
 
+prop_post_runExplosion :: Explosion -> Bool
+prop_post_runExplosion expl@(Explosion x y cpt phase) =
+    let maybeExpl' = runExplosion expl
+    in case maybeExpl' of
+        -- Case 1 : animation done (last phase, last frame)
+        Nothing -> cpt == nbFramesPerExplosionPhase && phase == (nbHitAssets - 1)
+        -- Case 2 : animation continue
+        Just (Explosion x' y' cpt' phase') ->
+            -- The position remain unchanged
+            x' == x && y' == y
+            -- Verify the correct evolution of the frame counter and the phase
+            && let expectedTransition =
+                    if cpt < nbFramesPerExplosionPhase then
+                        -- Increment of the counter, phase unchanged
+                        cpt' == cpt + 1 && phase' == phase
+                    else -- cpt == nbFramesPerExplosionPhase, transition to next phase, frame counter reseted
+                        cpt' == 1 && phase' == phase + 1 && phase < (nbHitAssets - 1)
+                in expectedTransition
+
 -- Get explosions, by veryfing if a collidable has disapeared from the original list
 getExplosions :: forall a. (Collidable a, Eq a) => [a] -> [a] -> [Explosion]
 getExplosions beforeCollisions afterCollisions =

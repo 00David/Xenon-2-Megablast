@@ -139,7 +139,7 @@ moveBonus :: Bonus -> ScreenScrollingSpeed -> Bonus
 moveBonus (PlayerBonus bo psb) ss = initPlayerShootBonus (moveObject bo ss) psb
 
 prop_pre_moveBonus :: Bonus -> ScreenScrollingSpeed -> Bool
-prop_pre_moveBonus _ ss = ss >= 0 -- positive screen scrolling speed
+prop_pre_moveBonus _ ss = ss > 0 -- strictly positive screen scrolling speed
 
 prop_post_moveBonus :: Bonus -> ScreenScrollingSpeed -> Bool
 prop_post_moveBonus b@(PlayerBonus _ psb) ss =

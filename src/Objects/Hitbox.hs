@@ -117,7 +117,7 @@ moveHitbox (Circle x y r) (dx,dy) = (initHitboxCircle (x+dx) (y+dy) r)
 moveHitbox (Rectangle x y w h) (dx,dy) = (initHitboxRectangle (x+dx) (y+dy) w h)
 moveHitbox (Hitboxes x y l) (dx,dy) = (initHitboxes (x+dx) (y+dy) (map (\h -> moveHitbox h (dx,dy)) l))
 
-prop_post_moveHitbox :: Hitbox -> (XCoord, YCoord) -> Bool
+prop_post_moveHitbox :: Hitbox -> (XCoord, YCoord) -> Bool -- verifies that the coordinates of the given Hitbox have been correctly translated
 prop_post_moveHitbox hit@(Circle x y r) d@(dx,dy) =
     case (moveHitbox hit d) of
         (Circle x2 y2 r2) -> x2 == x+dx && y2 == y+dy && r2 == r

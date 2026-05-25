@@ -100,7 +100,7 @@ moveProjectile proj ss =
         else (initEnemyShot newPo (projectileAsset proj) (projectileDamage proj))
 
 prop_pre_moveProjectile :: Projectile -> ScreenScrollingSpeed -> Bool
-prop_pre_moveProjectile _ ss = ss >= 0 -- screen scrolling speed positive
+prop_pre_moveProjectile _ ss = ss > 0 -- screen scrolling speed strictly positive
 
 prop_post_moveProjectile :: Projectile -> ScreenScrollingSpeed -> Bool
 prop_post_moveProjectile proj ss = 

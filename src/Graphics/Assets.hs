@@ -158,7 +158,7 @@ prop_post_completeScoreString scoreStr =
 
 -- Transforms an Int to its corresponding string of 7 digits, beeing completed by '0's at the beginning if needed,
 -- and beeing capped at a maximum value of 9999999 (7 digits)
-scoreToString :: Int -> String
+scoreToString :: Score -> String
 scoreToString score
     | l > 7 = "9999999"
     | l == 7 = scoreStr
@@ -167,10 +167,10 @@ scoreToString score
         scoreStr = show score
         l = List.length scoreStr
 
-prop_pre_scoreToString  :: Int -> Bool
+prop_pre_scoreToString  :: Score -> Bool
 prop_pre_scoreToString score = score >= 0 -- don't handle negative scores
 
-prop_post_scoreToString :: Int -> Bool
+prop_post_scoreToString :: Score -> Bool
 prop_post_scoreToString score =
     let scoreStr = scoreToString score
     in List.length scoreStr == 7 && scoreStr <= "9999999" -- exactly 7 digits (as string), capped at 9999999
@@ -178,7 +178,7 @@ prop_post_scoreToString score =
 -- Gets score digit assets translated on the screen, for a given player score
 -- First argument : indicates if it is about player1's score (or player2's score) (if assets must be translated on the left or right part of the bottom bar)
 -- Second argument : the player's score
-getTranslatedScoreAssets :: GameAssets -> Bool -> Int -> [Picture]
+getTranslatedScoreAssets :: GameAssets -> Bool -> Score -> [Picture]
 getTranslatedScoreAssets ga isP1 score =
     let xPadding = if isP1 then leftXScreenBound+100 else rightXScreenBound-100-27*6
         scoreStr = scoreToString score
@@ -189,10 +189,10 @@ getTranslatedScoreAssets ga isP1 score =
         aux i (d:ds) = ((Translate (xPadding+(27*(fromIntegral i)))) (bottomYScreenBound+16.5) (getDigitAsset ga (digitToInt d))):(aux (i+1) ds)
     in aux 0 scoreStr
 
-prop_pre_getTranslatedScoreAssets :: GameAssets -> Bool -> Int -> Bool
+prop_pre_getTranslatedScoreAssets :: GameAssets -> Bool -> Score -> Bool
 prop_pre_getTranslatedScoreAssets _ _ score = score >= 0 -- don't handle negative scores
 
-prop_post_getTranslatedScoreAssets :: GameAssets -> Bool -> Int -> Bool
+prop_post_getTranslatedScoreAssets :: GameAssets -> Bool -> Score -> Bool
 prop_post_getTranslatedScoreAssets ga isP1 score = 
     (List.length (getTranslatedScoreAssets ga isP1 score)) == 7 -- get as output an array of exactly 7 Picture (one for each score digit)
 
@@ -220,31 +220,31 @@ initHealthP2Assets = do
 
 -- Returns the correct health asset for the player (player 1 or 2, according to first argument), 
 -- for a given health (second argument, part of ]0, 100])
-getHealthAsset :: GameAssets -> Bool -> Int -> Picture
+getHealthAsset :: GameAssets -> Bool -> Health -> Picture
 getHealthAsset ga isP1 health = 
     let pHealthBarPics = if isP1 then p1HealthBarPics ga else p2HealthBarPics ga
     in Seq.index (healthPics pHealthBarPics) ((health - 1) `div` 10)
 
-prop_pre_getHealthAsset :: GameAssets -> Int -> Bool
+prop_pre_getHealthAsset :: GameAssets -> Health -> Bool
 prop_pre_getHealthAsset _ health
     | health <= 0 || health > 100 = False -- health must be inside ]0, 100]
     | otherwise = True
 
 -- Returns the correct health assets for both players 1 and 2 given healths. 
 -- If a player has exactly 0 health, no asset is returned for him.
-getTranslatedHealthAssets :: GameAssets -> Int -> Int  -> [Picture]
+getTranslatedHealthAssets :: GameAssets -> Health -> Health  -> [Picture]
 getTranslatedHealthAssets ga p1Health p2Health =
     -- Here, getHealthAsset cannot be called with a player health parameter at 0
     (if p1Health == 0 then [] else [(Translate (-169) (bottomYScreenBound+17) (getHealthAsset ga True p1Health))]) ++
     (if p2Health == 0 then [] else [(Translate 169 (bottomYScreenBound+17) (getHealthAsset ga True p2Health))])
 
-prop_pre_getTranslatedHealthAssets :: GameAssets -> Int -> Int  -> Bool
+prop_pre_getTranslatedHealthAssets :: GameAssets -> Health -> Health  -> Bool
 prop_pre_getTranslatedHealthAssets _ p1Health p2Health
     | p1Health < 0 || p1Health > 100 = False -- health must be inside [0, 100]
     | p2Health < 0 || p2Health > 100 = False -- health must be inside [0, 100]
     | otherwise = True
 
-prop_post_getTranslatedHealthAssets :: GameAssets -> Int -> Int -> Bool
+prop_post_getTranslatedHealthAssets :: GameAssets -> Health -> Health -> Bool
 prop_post_getTranslatedHealthAssets ga p1Health p2Health =
     let healthAssets = getTranslatedHealthAssets ga p1Health p2Health
     in case (p1Health, p2Health) of

@@ -141,7 +141,7 @@ moveRock (LeftRock ro asset frwd) ss = initRock (moveObject ro ss) asset True fr
 moveRock (RightRock ro asset frwd) ss = initRock (moveObject ro ss) asset False frwd
 
 prop_pre_moveRock :: Rock -> ScreenScrollingSpeed -> Bool
-prop_pre_moveRock _ ss = ss >= 0 -- positive screen scrolling speed
+prop_pre_moveRock _ ss = ss > 0 -- strictly positive screen scrolling speed
 
 prop_post_moveRock :: Rock -> ScreenScrollingSpeed -> Bool
 prop_post_moveRock r ss = 

@@ -114,7 +114,7 @@ moveFiniteWall :: (Movable a) => FiniteWall a -> ScreenScrollingSpeed -> FiniteW
 moveFiniteWall w ss = (fmap (flip move ss) w)
 
 prop_pre_moveFiniteWall :: FiniteWall a -> ScreenScrollingSpeed -> Bool
-prop_pre_moveFiniteWall  _ ss = ss >= 0 -- scren scrolling speed must be positive
+prop_pre_moveFiniteWall  _ ss = ss > 0 -- scren scrolling speed must be strictly positive
 
 prop_post_moveFiniteWall :: (Movable a) => FiniteWall a -> ScreenScrollingSpeed -> Bool
 prop_post_moveFiniteWall  wall@(FiniteWall elems) ss = 
@@ -255,7 +255,7 @@ partialMoveInfiniteWall :: (Movable a) => InfiniteWall a -> ScreenScrollingSpeed
 partialMoveInfiniteWall w ss = (partialMapWall (flip move ss) w)
 
 prop_pre_partialMoveInfiniteWall :: InfiniteWall a -> ScreenScrollingSpeed -> Bool
-prop_pre_partialMoveInfiniteWall _ ss = ss >= 0 -- screen scrolling speed must be positive
+prop_pre_partialMoveInfiniteWall _ ss = ss > 0 -- screen scrolling speed must be strictly positive
 
 prop_post_partialMoveInfiniteWall :: (Eq a, Movable a) =>  InfiniteWall a -> ScreenScrollingSpeed -> Bool
 prop_post_partialMoveInfiniteWall w ss = 
@@ -327,7 +327,7 @@ moveGameWalls (GameWalls left1 left2 right1 right2 walls) ss =
         (initGameWalls newLeft1 newLeft2 newRight1 newRight2 newWalls)
 
 prop_pre_moveGameWalls :: GameWalls -> ScreenScrollingSpeed -> Bool
-prop_pre_moveGameWalls _ ss = ss >= 0 -- screen scrolling speed positive
+prop_pre_moveGameWalls _ ss = ss > 0 -- screen scrolling speed must be strictly positive
 
 -- Indicates if game walls are inside of the screen
 insideScreenGameWalls :: GameWalls -> Bool

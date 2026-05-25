@@ -501,7 +501,7 @@ prop_post_generateListEnemies :: Int -> StdGen -> Bool
 prop_post_generateListEnemies n gen =
     let (gen', newEnemies) = generateListEnemies n gen
     in if n == 0 then gen' == gen && (length newEnemies) == 0 -- no generations
-        else gen' /= gen && all insideScreen newEnemies -- for an Enemy, he is considered inside even above screen
+        else gen' /= gen && all insideScreenOrAboveEnemy newEnemies -- for an Enemy, he is considered inside even above screen
 
 
 -- Generates a formation of enemies, for the given parameters, having centerX being the X center of the fromation
@@ -530,10 +530,10 @@ prop_pre_generateFormation enemyType n centerX y xTarget yTarget =
     && (yTarget >= bottomYScreenBound && yTarget <= topYScreenBound) -- y and x target inside the screen
     && (xTarget >= leftXScreenBound && xTarget <= rightXScreenBound) 
 
-prop_post_generateFormation :: Int -> Int -> Float -> Float -> Float -> Float -> Bool
+prop_post_generateFormation :: Int -> Int -> XCoord -> YCoord -> XCoord -> YCoord -> Bool
 prop_post_generateFormation enemyType n centerX y xTarget yTarget =
     let newEnemies = generateFormation enemyType n centerX y xTarget yTarget
-    in (length newEnemies) > 0 && all insideScreen newEnemies -- all generated enemies must be inside or above the screen
+    in (length newEnemies) > 0 && all insideScreenOrAboveEnemy newEnemies -- all generated enemies must be inside or above the screen
 
 
 -- ============================================================
@@ -655,18 +655,13 @@ data EnemyScript =
 prop_inv_enemyScript :: EnemyScript -> Bool
 prop_inv_enemyScript (NoMoveButBoomEnemy) = True
 prop_inv_enemyScript (LeftRightShootEnemy xTarget yTarget shootD) = 
-    xTarget > leftXScreenBound && xTarget < rightXScreenBound
-    && yTarget > bottomYScreenWithBarBound 
+    xTarget > leftXScreenBound && xTarget < rightXScreenBound && yTarget > bottomYScreenWithBarBound 
     && shootD > 0 && shootD <= leftRightShootEnemyShootDelay
 prop_inv_enemyScript (LoopEnemy yTarget blSteps lSteps tlSteps tSteps trSteps rSteps brSteps _) = 
-    yTarget > bottomYScreenWithBarBound
-    && blSteps >= 0 && blSteps <= defaultNbSteps
-    && lSteps >= 0 && lSteps <= defaultNbSteps
-    && tlSteps >= 0 && tlSteps <= defaultNbSteps
-    && tSteps >= 0 && tSteps <= defaultNbSteps
-    && trSteps >= 0 && trSteps <= defaultNbSteps
-    && rSteps >= 0 && rSteps <= defaultNbSteps
-    && brSteps >= 0 && brSteps <= defaultNbSteps
+    yTarget > bottomYScreenWithBarBound && blSteps >= 0 && blSteps <= defaultNbSteps
+    && lSteps >= 0 && lSteps <= defaultNbSteps && tlSteps >= 0 && tlSteps <= defaultNbSteps
+    && tSteps >= 0 && tSteps <= defaultNbSteps && trSteps >= 0 && trSteps <= defaultNbSteps
+    && rSteps >= 0 && rSteps <= defaultNbSteps && brSteps >= 0 && brSteps <= defaultNbSteps
 
 -- ============================================================
 -- ================ ENEMY SCRIPT CONSTRUCTORS =================
