@@ -34,9 +34,7 @@ prop_inv_rock :: Rock -> Bool
 prop_inv_rock rock =
     let obj =  rockObject rock
         asset = rockAsset rock
-    in case obj of
-        (MovableO _ _ _) -> False
-        (StaticO _) -> prop_inv_object obj && asset >= 0 && asset <= (nbRockAssets-1)
+    in not (isMovable obj) && prop_inv_object obj && asset >= 0 && asset <= (nbRockAssets-1)
 
 -- ============================================================
 -- =================== ROCK CONSTRUCTORS ======================

@@ -330,26 +330,22 @@ keepBumpin ss obj gw anotherP =
         
         -- Generate candidate positions: alternating left and right from start
         -- Distance 1: [xStart - ss, xStart + ss]
-        -- Distance 2: [xStart - 2*ss, xStart + 2*ss], etc.
+        -- Distance 2: [xStart - 2*ss, xStart + 2*ss], etc...
         candidates = concatMap (\distance ->
-            let offset = distance * ss
+            let offset = (fromIntegral distance) * ss
                 xLeft = xStart - offset
                 xRight = xStart + offset
-            in [(xLeft, distance), (xRight, distance)]
-            ) [1..1000] -- Large enough to cover the screen width
-        
-        -- Check if a position is valid (inside screen and no collision)
-        isValid x = 
-            let objAtX = initPlayerObject x y (objectDirection obj) (objectSpeed obj)
-            in x >= leftBound && x <= rightBound 
-                && not (collision objAtX gw) 
-                && not (collision objAtX anotherP)
+            in [xLeft, xRight]
+            ) [1..1000::Int] -- Large enough to cover the screen width
         
         -- Find the first valid position
+        findValidPos :: [Float] -> Object
         findValidPos [] = obj -- Should never happen, but keep original if no valid position
-        findValidPos ((x, _):xs) = 
-            if isValid x 
-                then initPlayerObject x y (objectDirection obj) (objectSpeed obj)
+        findValidPos (x:xs) = 
+            let objAtX = initPlayerObject x y (objectDirection obj) (objectSpeed obj) 
+            -- Check if a position is valid (inside screen and no collision)
+            in if x >= leftBound && x <= rightBound && not (collision objAtX gw) && not (collision objAtX anotherP)
+                then objAtX
                 else findValidPos xs
                 
     in findValidPos candidates

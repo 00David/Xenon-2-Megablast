@@ -1,7 +1,7 @@
 {-# LANGUAGE InstanceSigs #-}
 module Graphics.Assets (module Graphics.Assets) where
 
-import Graphics.Gloss ( Picture(Translate, Color), rectangleWire, circleSolid, red, blue )
+import Graphics.Gloss ( Picture(Translate))
 import Graphics.Gloss.Juicy
 
 import Data.Char
@@ -10,7 +10,6 @@ import qualified Data.Sequence as Seq
 import qualified Data.List as List
 
 import GameSetup
-import Objects.Hitbox
 
 -- ============================================================
 -- ================= RENDERABLE TYPECLASS =====================
@@ -93,22 +92,6 @@ initGameAssets = do
     return $ GameAssets p1 p2 p1Explosions p2Explosions pDamaged pInvincible boosters enemies
         bottomLeft bottomBar bottomRight ds p1Health p2Health leftWalls rightWalls 
         p1Shots p2Shots eShots hits pShootBonus
-
--- Translates a hitbox into its visible borders, for debug purpose
-translateHitbox :: Hitbox -> [Picture]
-translateHitbox (Circle x y r) = 
-    [Translate x y $
-        Color red $
-        circleSolid r
-    ]
-translateHitbox (Rectangle x y w h) = 
-    let centerX = x + (w / 2)
-        centerY = y + (h / 2)
-    in [Translate centerX centerY $
-        Color blue $
-        rectangleWire w h
-    ]
-translateHitbox (Hitboxes _ _ l) = foldr (\h acc -> (translateHitbox h) <> acc) [] l
 
 -- ============================================================
 -- ======================= BOTTOM BAR =========================

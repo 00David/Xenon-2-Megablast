@@ -61,10 +61,11 @@ genHitboxes = do
     -- max 9 more hitboxes => max 10 at total
     n <- choose (0, 9)
     let genAtomic = oneof
-                [ Circle <$> arbitrary <*> arbitrary <*> (abs <$> arbitrary) -- radius >= 0
-                , Rectangle <$> arbitrary <*> arbitrary <*> (getPositive <$> arbitrary) <*> (getPositive <$> arbitrary)] -- width > 0 && heigth > 0
+                [ TestHitbox <$> genCircle
+                , TestHitbox <$> genRectangle ]
+                
     rest <- vectorOf n genAtomic
-    return (Hitboxes x y (base : rest))
+    return (Hitboxes x y (base : (map getHitbox rest)))
 
 -- Initializes Hitboxes veryfing their invariant
 newtype TestHitbox = TestHitbox { getHitbox :: Hitbox } deriving (Eq, Show)

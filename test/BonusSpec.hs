@@ -22,6 +22,7 @@ import Graphics.Assets
 import Typeclasses.Invariant
 
 import AssetsSpec(TestGameAssets(..))
+import HitboxSpec(TestHitbox(..))
 import ObjectsSpec(TestObject(..))
 import EnemySpec(TestEnemy(..))
 
@@ -56,13 +57,13 @@ newtype TestBonus = TestBonus { getTBonus :: Bonus } deriving (Eq, Show)
 instance Arbitrary TestBonus where
     arbitrary :: Gen TestBonus
     arbitrary = do
-        (TestObject obj) <- arbitrary
-        (TestPlayerShootBonus bonus) <- arbitrary
-        return (TestBonus (initPlayerShootBonus obj bonus))
+            (TestHitbox h) <- arbitrary
+            (TestPlayerShootBonus bonus) <- arbitrary
+            return (TestBonus (initPlayerShootBonus (initStaticObject h) bonus))
 
 prop_initPlayerShootBonus_preservesInvariant :: TestObject -> TestPlayerShootBonus -> Property
 prop_initPlayerShootBonus_preservesInvariant (TestObject obj) (TestPlayerShootBonus psb) =
-    property $ prop_inv_bonus (initPlayerShootBonus obj psb)
+    not (isMovable obj) ==> prop_inv_bonus (initPlayerShootBonus obj psb)
 
 prop_startInitPlayerShootBonus_preservesInvariant :: XCoord -> YCoord -> TestPlayerShootBonus -> Bool
 prop_startInitPlayerShootBonus_preservesInvariant x y (TestPlayerShootBonus psb) =

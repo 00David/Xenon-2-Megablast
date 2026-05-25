@@ -635,8 +635,8 @@ type DelayRemaining = Int
 data EnemyScript =
     NoMoveButBoomEnemy
     | LeftRightShootEnemy{ 
-            xTargetEnemyScript :: Float,  -- the X that the enemy must reach while going left or right. Once it is reached, its sign is inverted. 
-            yTargetEnemyScript :: Float, -- the Y that the enemy must reach before going left/right
+            xTargetEnemyScript :: XCoord,  -- the X that the enemy must reach while going left or right. Once it is reached, its sign is inverted. 
+            yTargetEnemyScript :: YCoord, -- the Y that the enemy must reach before going left/right
             shootDelayEnemyScript :: Int -- shoots every time this delay reaches 1, then reseted. Must be inside [1, leftRightShootEnemyShootDelay]
         }
     | LoopEnemy{ 

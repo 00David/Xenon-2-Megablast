@@ -19,19 +19,21 @@ import Typeclasses.Movable
 -- ============================================================
 
 data Bonus = PlayerBonus { -- we could imagine having more types of bonuses ...
-    bonusObject :: Object, -- graphical representation of the bonus, while he has not yet been picked up
+    bonusObject :: Object, -- graphical representation of the bonus, while he has not yet been picked up. Must be static
     getBonus :: PlayerShootBonus -- the bonus itself
 } deriving (Eq, Show)
 
 prop_inv_bonus :: Bonus -> Bool
-prop_inv_bonus (PlayerBonus bo psb) = prop_inv_object bo && prop_inv_playerShootBonus psb
+prop_inv_bonus (PlayerBonus bo psb) = not (isMovable bo) && prop_inv_object bo && prop_inv_playerShootBonus psb
 
 -- ============================================================
 -- =================== BONUS CONSTRUCTORS =====================
 -- ============================================================
 
 initPlayerShootBonus :: Object -> PlayerShootBonus -> Bonus
-initPlayerShootBonus bo psb = PlayerBonus bo psb
+initPlayerShootBonus bo psb = 
+    if isMovable bo then error "bonus Object must be static" 
+    else PlayerBonus bo psb
 
 startInitPlayerShootBonus :: XCoord -> YCoord -> PlayerShootBonus -> Bonus
 startInitPlayerShootBonus x y psb =

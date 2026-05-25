@@ -19,15 +19,16 @@ import Typeclasses.Movable
 type ProjectileAsset = Int -- 0 or 1 for a player shot. 0 for an enemy shot
 -- type Damage = Int -- shot damage >= 0
 
+-- The contained Object must move by itself, not static
 data Projectile = 
     PlayerShot Object ProjectileAsset Damage PlayerId
     | EnemyShot Object ProjectileAsset Damage
     deriving (Eq, Show)
 
 prop_inv_projectile :: Projectile -> Bool
-prop_inv_projectile (PlayerShot po asset d pId) = prop_inv_object po && (asset >= 0 && asset <= (nbPlayerShotAssets-1)) && d >= 1
-    && (pId == 1 || pId == 2)
-prop_inv_projectile (EnemyShot po asset d) = prop_inv_object po && (asset >= 0 && asset <= (nbEnemyShotAssets-1)) && d >= 1
+prop_inv_projectile (PlayerShot po asset d pId) = isMovable po && prop_inv_object po && (asset >= 0 && asset <= (nbPlayerShotAssets-1)) && d >= 1
+                        && (pId == 1 || pId == 2)
+prop_inv_projectile (EnemyShot po asset d) = isMovable po && prop_inv_object po && (asset >= 0 && asset <= (nbPlayerShotAssets-1)) && d >= 1
 
 -- ============================================================
 -- ================ PROJECTILE CONSTRUCTORS ===================
@@ -35,6 +36,7 @@ prop_inv_projectile (EnemyShot po asset d) = prop_inv_object po && (asset >= 0 &
 
 initPlayerShot :: Object -> ProjectileAsset -> Damage -> PlayerId -> Projectile
 initPlayerShot po asset d pId
+    | not (isMovable po) = error "projectile Object must move by itself"
     | not (asset >= 0 && asset <= (nbPlayerShotAssets-1)) = error "invalid asset index"
     | d < 1 = error "damage must be >= 1"
     | not (pId == 1 || pId == 2) = error "invalid player id"
@@ -52,6 +54,7 @@ prop_pre_startInitPlayerShot _ _ _ asset d pId = asset >= 0 && asset <= (nbPlaye
 
 initEnemyShot :: Object -> ProjectileAsset -> Damage -> Projectile
 initEnemyShot po asset d
+    | not (isMovable po) = error "projectile Object must move by itself"
     | not (asset >= 0 && asset <= (nbEnemyShotAssets-1)) = error "invalid asset index"
     | d < 1 = error "damage must be >= 1"
     | otherwise = EnemyShot po asset d

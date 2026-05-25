@@ -129,7 +129,7 @@ insideScreenFiniteWall w = (all insideScreen w)
 -- ===================== INFINITE WALLS =======================
 -- ============================================================
 
--- an infinite wall is a non empty list of static objects
+-- an infinite wall is a non empty list of collidables
 newtype InfiniteWall a = InfiniteWall [a]
 
 instance Eq a => Eq (InfiniteWall a) where

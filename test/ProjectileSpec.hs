@@ -18,7 +18,8 @@ import Objects.Objects
 import Objects.Hitbox
 import Typeclasses.Invariant
 import AssetsSpec(TestGameAssets(..))
-import ObjectsSpec(TestObject(..), TestObjectSpeed(..))
+import HitboxSpec(TestHitbox(..))
+import ObjectsSpec(TestObject(..), TestDirection(..), TestObjectSpeed(..))
 
 spec :: Spec
 spec = do
@@ -44,7 +45,9 @@ newtype TestProjectile = TestProjectile { getProjectile :: Projectile }deriving 
 instance Arbitrary TestProjectile where
     arbitrary :: Gen TestProjectile
     arbitrary = do
-        (TestObject obj) <- arbitrary
+        (TestHitbox h) <- arbitrary
+        (TestDirection d) <- arbitrary
+        (TestObjectSpeed os) <- arbitrary
 
         assetPlayerShot <- choose (0, nbPlayerShotAssets - 1)
         playerId <- choose (1, 2)
@@ -54,8 +57,8 @@ instance Arbitrary TestProjectile where
         dmg <- getPositive <$> arbitrary
 
         shot <- oneof
-            [ return (PlayerShot obj assetPlayerShot dmg playerId)
-            , return (EnemyShot obj assetEnemyShot dmg)
+            [ return (PlayerShot (initMovableObject h d os) assetPlayerShot dmg playerId)
+            , return (EnemyShot (initMovableObject h d os) assetEnemyShot dmg)
             ]
         return (TestProjectile shot)
 
@@ -63,7 +66,7 @@ prop_initPlayerShot_preservesInvariant :: TestObject -> Damage -> Property
 prop_initPlayerShot_preservesInvariant (TestObject obj) d =
     forAll (choose (0, (nbPlayerShotAssets-1))) $ \asset ->
     forAll (choose (1, 2)) $ \pId ->
-        d >= 1 ==> prop_inv_projectile (initPlayerShot obj asset d pId)
+        isMovable obj && d >= 1 ==> prop_inv_projectile (initPlayerShot obj asset d pId)
 
 prop_startInitPlayerShot_preservesInvariant :: XCoord -> YCoord -> TestObjectSpeed -> Damage -> Property
 prop_startInitPlayerShot_preservesInvariant x y (TestObjectSpeed os) d =
@@ -74,7 +77,7 @@ prop_startInitPlayerShot_preservesInvariant x y (TestObjectSpeed os) d =
 prop_initEnemyShot_preservesInvariant :: TestObject -> Damage -> Property
 prop_initEnemyShot_preservesInvariant (TestObject obj) d =
     forAll (choose (0, (nbEnemyShotAssets-1))) $ \asset ->
-        d >= 1 ==> prop_inv_projectile (initEnemyShot obj asset d)
+        isMovable obj && d >= 1 ==> prop_inv_projectile (initEnemyShot obj asset d)
 
 prop_startInitEnemyShot_preservesInvariant :: XCoord -> YCoord -> TestObjectSpeed -> Damage -> Property
 prop_startInitEnemyShot_preservesInvariant x y (TestObjectSpeed os) d =

@@ -13,7 +13,6 @@ class Movable a where
 -- Commutativity cannot be kept as a law for move beacuse the Object instance implies having the ability to move
 -- independantly of the given screen scrolling speed.
 
--- Law not tested because it is not really relevant to test it for each instance. 
--- However, it is tested as a precondition before each move.
-law_positive_screenSpeed :: a -> ScreenScrollingSpeed -> Bool
-law_positive_screenSpeed _ s = s >= 0
+-- Law tested as a precondition before each move.
+law_strict_positive_screenSpeed :: a -> ScreenScrollingSpeed -> Bool
+law_strict_positive_screenSpeed _ s = s > 0

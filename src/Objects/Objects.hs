@@ -131,6 +131,11 @@ collisionObject o1 o2 = collisionHitbox (objectHitbox o1) (objectHitbox o2)
 prop_commutativity_collisionObject :: Object -> Object -> Bool
 prop_commutativity_collisionObject o1 o2 = (collisionObject o1 o2 == collisionObject o2 o1)
 
+-- Indicates if an Object is movable by itself. Otherwise he is static and depends on the screen scrolling speed.
+isMovable :: Object -> Bool
+isMovable (MovableO _ _ _)  = True
+isMovable (StaticO _)  = False
+
 -- ============================================================
 -- ================== DIRECTION INVARIANT =====================
 -- ============================================================
